@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>QR Master</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&family=Syne:wght@700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="atmosphere" aria-hidden="true"></div>
+
+    <main class="app">
+      <header class="brand">
+        <h1>QR Master</h1>
+        <p>URL로 QR을 만들고, 이미지·카메라로 스캔합니다.</p>
+      </header>
+
+      <nav class="mode-tabs" aria-label="기능 선택">
+        <button type="button" class="mode-tab is-active" data-mode="create">
+          생성
+        </button>
+        <button type="button" class="mode-tab" data-mode="scan">스캔</button>
+      </nav>
+
+      <section class="panel is-active" id="create-panel">
+        <form class="url-bar" id="qr-form" autocomplete="off">
+          <label class="sr-only" for="url-input">URL</label>
+          <input
+            id="url-input"
+            type="text"
+            name="url"
+            inputmode="url"
+            placeholder="https://example.com"
+            required
+            spellcheck="false"
+          />
+          <button type="submit" id="generate-btn">생성</button>
+        </form>
+
+        <section class="result" id="result" hidden>
+          <button
+            type="button"
+            class="qr-button"
+            id="qr-button"
+            aria-label="QR 코드 다운로드"
+            title="클릭하여 JPG로 저장"
+          >
+            <div id="qrcode" class="qrcode"></div>
+            <canvas
+              id="qr-canvas"
+              class="export-canvas"
+              width="280"
+              height="280"
+              hidden
+            ></canvas>
+          </button>
+          <p class="qr-url" id="qr-url"></p>
+          <p class="hint">QR 코드를 클릭하면 JPG로 저장할 수 있습니다.</p>
+        </section>
+      </section>
+
+      <section class="panel" id="scan-panel">
+        <div class="scan-actions">
+          <button type="button" class="scan-action" id="upload-scan-btn">
+            <span>이미지 업로드</span>
+            <small>사진·캡처 파일에서 QR 읽기</small>
+          </button>
+          <input
+            id="scan-file"
+            class="sr-only"
+            type="file"
+            accept="image/*"
+            tabindex="-1"
+          />
+
+          <button type="button" class="scan-action" id="camera-scan-btn">
+            <span>카메라로 스캔</span>
+            <small>PC 카메라로 실시간 인식</small>
+          </button>
+        </div>
+
+        <p class="hint scan-hint">
+          Windows 카메라 앱으로 찍은 사진은
+          <strong>이미지 업로드</strong>로도 스캔할 수 있습니다.
+        </p>
+
+        <section class="scan-result" id="scan-result" hidden>
+          <p class="scan-label">스캔 결과</p>
+          <p class="qr-url" id="scan-text"></p>
+          <div class="scan-result-actions">
+            <a
+              class="action-link"
+              id="scan-open-link"
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer"
+              hidden
+              >링크 열기</a
+            >
+            <button type="button" class="ghost-btn" id="scan-copy-btn">
+              복사
+            </button>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <dialog class="save-dialog" id="save-dialog">
+      <form method="dialog" id="save-form">
+        <h2>QR 코드 저장</h2>
+        <p>파일명을 입력한 뒤 저장 위치를 선택하세요.</p>
+
+        <label for="filename-input">파일명</label>
+        <div class="filename-row">
+          <input
+            id="filename-input"
+            type="text"
+            maxlength="80"
+            spellcheck="false"
+            required
+          />
+          <span class="ext">.jpg</span>
+        </div>
+
+        <div class="dialog-actions">
+          <button type="submit" value="cancel" class="ghost" formnovalidate>
+            취소
+          </button>
+          <button type="submit" value="save" id="save-confirm">
+            위치 선택 후 저장
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="camera-dialog" id="camera-dialog">
+      <div class="camera-shell">
+        <header class="camera-header">
+          <h2>카메라 스캔</h2>
+          <p>QR 코드를 화면 안에 맞춰 주세요.</p>
+        </header>
+
+        <div class="camera-stage">
+          <video id="camera-video" playsinline muted></video>
+          <canvas id="camera-canvas" class="export-canvas" hidden></canvas>
+          <div class="camera-frame" aria-hidden="true"></div>
+        </div>
+
+        <p class="camera-status" id="camera-status">카메라를 준비하는 중…</p>
+
+        <div class="dialog-actions camera-actions">
+          <button type="button" class="ghost" id="open-windows-camera">
+            Windows 카메라 앱 열기
+          </button>
+          <button type="button" class="ghost" id="camera-close">닫기</button>
+        </div>
+      </div>
+    </dialog>
+
+    <script src="qrcode.min.js"></script>
+    <script src="jsQR.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
