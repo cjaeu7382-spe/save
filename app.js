@@ -1,332 +1,470 @@
-(function () {
-  const fileInput = document.getElementById("file-input");
-  const dropzone = document.getElementById("dropzone");
-  const filmstrip = document.getElementById("filmstrip");
-  const frameCount = document.getElementById("frame-count");
-  const previewCanvas = document.getElementById("preview-canvas");
-  const previewEmpty = document.getElementById("preview-empty");
-  const previewStatus = document.getElementById("preview-status");
-  const btnMake = document.getElementById("btn-make");
-  const progress = document.getElementById("progress");
-  const progressBar = document.getElementById("progress-bar");
-  const progressText = document.getElementById("progress-text");
-  const download = document.getElementById("download");
-  const resultGif = document.getElementById("result-gif");
+const form = document.getElementById("qr-form");
+const urlInput = document.getElementById("url-input");
+const result = document.getElementById("result");
+const qrHost = document.getElementById("qrcode");
+const qrCanvas = document.getElementById("qr-canvas");
+const qrButton = document.getElementById("qr-button");
+const qrUrl = document.getElementById("qr-url");
+const saveDialog = document.getElementById("save-dialog");
+const saveForm = document.getElementById("save-form");
+const filenameInput = document.getElementById("filename-input");
 
-  const frames = [];
-  let dragFrom = null;
-  let previewTimer = 0;
-  let previewIndex = 0;
-  let objectUrl = "";
+const createPanel = document.getElementById("create-panel");
+const scanPanel = document.getElementById("scan-panel");
+const modeTabs = document.querySelectorAll(".mode-tab");
+const scanFileInput = document.getElementById("scan-file");
+const uploadScanBtn = document.getElementById("upload-scan-btn");
+const cameraScanBtn = document.getElementById("camera-scan-btn");
+const scanResult = document.getElementById("scan-result");
+const scanText = document.getElementById("scan-text");
+const scanOpenLink = document.getElementById("scan-open-link");
+const scanCopyBtn = document.getElementById("scan-copy-btn");
 
-  function uid() {
-    return Math.random().toString(36).slice(2);
-  }
+const cameraDialog = document.getElementById("camera-dialog");
+const cameraVideo = document.getElementById("camera-video");
+const cameraCanvas = document.getElementById("camera-canvas");
+const cameraStatus = document.getElementById("camera-status");
+const cameraCloseBtn = document.getElementById("camera-close");
+const openWindowsCameraBtn = document.getElementById("open-windows-camera");
 
-  function updateCount() {
-    frameCount.textContent = "프레임 " + frames.length;
-    btnMake.disabled = frames.length < 2;
-    previewEmpty.style.display = frames.length ? "none" : "block";
-    previewCanvas.style.display = frames.length ? "block" : "none";
-  }
+const QR_SIZE = 280;
+let currentUrl = "";
+let qrInstance = null;
+let cameraStream = null;
+let scanLoopId = 0;
+let lastScannedValue = "";
 
-  function renderStrip() {
-    filmstrip.innerHTML = "";
-    frames.forEach(function (frame, index) {
-      const card = document.createElement("article");
-      card.className = "frame-card";
-      card.draggable = true;
-      card.dataset.id = frame.id;
-      card.setAttribute("role", "listitem");
+function normalizeUrl(raw) {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
 
-      const img = document.createElement("img");
-      img.src = frame.thumb;
-      img.alt = "프레임 " + (index + 1);
-      card.appendChild(img);
-
-      const meta = document.createElement("div");
-      meta.className = "meta";
-      meta.innerHTML = "<span>#" + (index + 1) + "</span><span>드래그로 이동</span>";
-      card.appendChild(meta);
-
-      const remove = document.createElement("button");
-      remove.type = "button";
-      remove.setAttribute("aria-label", "삭제");
-      remove.textContent = "×";
-      remove.addEventListener("click", function () {
-        const i = frames.findIndex(function (f) {
-          return f.id === frame.id;
-        });
-        if (i >= 0) {
-          URL.revokeObjectURL(frames[i].thumb);
-          frames.splice(i, 1);
-          renderStrip();
-          restartPreview();
-        }
-      });
-      card.appendChild(remove);
-
-      card.addEventListener("dragstart", function () {
-        dragFrom = frame.id;
-      });
-      card.addEventListener("dragover", function (event) {
-        event.preventDefault();
-      });
-      card.addEventListener("drop", function (event) {
-        event.preventDefault();
-        if (!dragFrom || dragFrom === frame.id) return;
-        const from = frames.findIndex(function (f) {
-          return f.id === dragFrom;
-        });
-        const to = frames.findIndex(function (f) {
-          return f.id === frame.id;
-        });
-        const moved = frames.splice(from, 1)[0];
-        frames.splice(to, 0, moved);
-        renderStrip();
-        restartPreview();
-      });
-
-      filmstrip.appendChild(card);
-    });
-    updateCount();
-  }
-
-  function loadImageFile(file) {
-    return new Promise(function (resolve, reject) {
-      const url = URL.createObjectURL(file);
-      const img = new Image();
-      img.onload = function () {
-        resolve({
-          id: uid(),
-          source: img,
-          thumb: url,
-          kind: "image",
-        });
-      };
-      img.onerror = reject;
-      img.src = url;
-    });
-  }
-
-  function loadVideoFrames(file) {
-    return new Promise(function (resolve, reject) {
-      const url = URL.createObjectURL(file);
-      const video = document.createElement("video");
-      video.preload = "auto";
-      video.muted = true;
-      video.src = url;
-      video.onloadedmetadata = async function () {
-        const duration = Math.min(video.duration || 1, 8);
-        const count = Math.min(24, Math.max(6, Math.round(duration * 6)));
-        const canvas = document.createElement("canvas");
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const ctx = canvas.getContext("2d");
-        const extracted = [];
-        for (let i = 0; i < count; i++) {
-          video.currentTime = (duration * i) / count;
-          await new Promise(function (done) {
-            video.onseeked = done;
-          });
-          ctx.drawImage(video, 0, 0);
-          const img = new Image();
-          const thumb = canvas.toDataURL("image/jpeg", 0.7);
-          await new Promise(function (done) {
-            img.onload = done;
-            img.src = canvas.toDataURL("image/png");
-          });
-          extracted.push({ id: uid(), source: img, thumb: thumb, kind: "video" });
-        }
-        URL.revokeObjectURL(url);
-        resolve(extracted);
-      };
-      video.onerror = reject;
-    });
-  }
-
-  async function addFiles(fileList) {
-    const list = Array.from(fileList);
-    for (const file of list) {
-      if (file.type.startsWith("video/")) {
-        const extracted = await loadVideoFrames(file);
-        frames.push.apply(frames, extracted);
-      } else if (file.type.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp)$/i.test(file.name)) {
-        frames.push(await loadImageFile(file));
-      }
-    }
-    renderStrip();
-    restartPreview();
-  }
-
-  function outputSize() {
-    const width = Math.max(16, Math.min(1280, Number(document.getElementById("opt-width").value) || 480));
-    if (!frames.length) return { width: width, height: Math.round(width * 0.66) };
-    const first = frames[0].source;
-    const height = Math.max(16, Math.round((width * first.naturalHeight) / first.naturalWidth) || Math.round(width * 0.66));
-    return { width: width, height: height };
-  }
-
-  function drawFitted(ctx, source, width, height, fit, bg) {
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, width, height);
-    const sw = source.naturalWidth || source.width;
-    const sh = source.naturalHeight || source.height;
-    if (!sw || !sh) return;
-    if (fit === "stretch") {
-      ctx.drawImage(source, 0, 0, width, height);
-      return;
-    }
-    const scale = fit === "cover" ? Math.max(width / sw, height / sh) : Math.min(width / sw, height / sh);
-    const dw = sw * scale;
-    const dh = sh * scale;
-    ctx.drawImage(source, (width - dw) / 2, (height - dh) / 2, dw, dh);
-  }
-
-  function restartPreview() {
-    clearInterval(previewTimer);
-    if (!frames.length) {
-      previewStatus.textContent = "대기";
-      return;
-    }
-    const size = outputSize();
-    previewCanvas.width = size.width;
-    previewCanvas.height = size.height;
-    previewIndex = 0;
-    const delay = Number(document.getElementById("opt-delay").value) || 120;
-    const ctx = previewCanvas.getContext("2d");
-    const paint = function () {
-      const fit = document.getElementById("opt-fit").value;
-      const bg = document.getElementById("opt-bg").value;
-      drawFitted(ctx, frames[previewIndex].source, size.width, size.height, fit, bg);
-      previewStatus.textContent = previewIndex + 1 + " / " + frames.length;
-      previewIndex = (previewIndex + 1) % frames.length;
-    };
-    paint();
-    previewTimer = setInterval(paint, delay);
-  }
-
-  ["opt-width", "opt-delay", "opt-fit", "opt-bg"].forEach(function (id) {
-    document.getElementById(id).addEventListener("input", restartPreview);
-    document.getElementById(id).addEventListener("change", restartPreview);
-  });
-
-  document.getElementById("btn-add").addEventListener("click", function () {
-    fileInput.click();
-  });
-
-  document.getElementById("btn-sample").addEventListener("click", async function () {
-    const colors = ["#e8a45a", "#c46a3a", "#7d9a6f", "#d7c4a3", "#3d6b8a", "#f4efe6"];
-    const words = ["FRAME", "LAB", "MAKE", "A", "GIF", "NOW"];
-    for (let i = 0; i < colors.length; i++) {
-      const canvas = document.createElement("canvas");
-      canvas.width = 480;
-      canvas.height = 320;
-      const ctx = canvas.getContext("2d");
-      ctx.fillStyle = "#14110e";
-      ctx.fillRect(0, 0, 480, 320);
-      ctx.fillStyle = colors[i];
-      ctx.beginPath();
-      ctx.arc(140 + i * 28, 160, 70, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#f4efe6";
-      ctx.font = "italic 54px 'Instrument Serif', serif";
-      ctx.fillText(words[i], 230, 175);
-      const img = new Image();
-      const dataUrl = canvas.toDataURL("image/png");
-      await new Promise(function (done) {
-        img.onload = done;
-        img.src = dataUrl;
-      });
-      frames.push({ id: uid(), source: img, thumb: dataUrl, kind: "sample" });
-    }
-    renderStrip();
-    restartPreview();
-  });
-  fileInput.addEventListener("change", function () {
-    addFiles(fileInput.files);
-    fileInput.value = "";
-  });
-
-  ["dragenter", "dragover"].forEach(function (type) {
-    dropzone.addEventListener(type, function (event) {
-      event.preventDefault();
-      dropzone.classList.add("dragover");
-    });
-  });
-  ["dragleave", "drop"].forEach(function (type) {
-    dropzone.addEventListener(type, function (event) {
-      event.preventDefault();
-      dropzone.classList.remove("dragover");
-    });
-  });
-  dropzone.addEventListener("drop", function (event) {
-    if (event.dataTransfer.files.length) addFiles(event.dataTransfer.files);
-  });
-
-  document.getElementById("btn-reverse").addEventListener("click", function () {
-    frames.reverse();
-    renderStrip();
-    restartPreview();
-  });
-
-  document.getElementById("btn-clear").addEventListener("click", function () {
-    frames.splice(0, frames.length);
-    renderStrip();
-    restartPreview();
-    download.hidden = true;
-    resultGif.hidden = true;
-  });
-
-  document.getElementById("btn-make").addEventListener("click", async function () {
-    if (frames.length < 2) return;
-    btnMake.disabled = true;
-    progress.hidden = false;
-    download.hidden = true;
-    resultGif.hidden = true;
-    progressBar.style.width = "0%";
-    progressText.textContent = "캔버스 준비 중";
-
-    const size = outputSize();
-    const fit = document.getElementById("opt-fit").value;
-    const bg = document.getElementById("opt-bg").value;
-    const canvas = document.createElement("canvas");
-    canvas.width = size.width;
-    canvas.height = size.height;
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    const imageDatas = [];
-    for (let i = 0; i < frames.length; i++) {
-      drawFitted(ctx, frames[i].source, size.width, size.height, fit, bg);
-      imageDatas.push(ctx.getImageData(0, 0, size.width, size.height));
-    }
-
+  try {
+    return new URL(trimmed).href;
+  } catch {
     try {
-      const blob = await window.GifLab.encodeGif(
-        imageDatas,
-        {
-          width: size.width,
-          height: size.height,
-          delay: Number(document.getElementById("opt-delay").value) || 120,
-          loop: Number(document.getElementById("opt-loop").value),
-          dither: document.getElementById("opt-dither").checked,
-        },
-        function (ratio) {
-          progressBar.style.width = Math.round(ratio * 100) + "%";
-          progressText.textContent = "인코딩 " + Math.round(ratio * 100) + "%";
-        }
-      );
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-      objectUrl = URL.createObjectURL(blob);
-      download.href = objectUrl;
-      download.download = "frame-lab.gif";
-      download.hidden = false;
-      resultGif.src = objectUrl;
-      resultGif.hidden = false;
-      progressText.textContent = "완료 · " + Math.round(blob.size / 1024) + " KB";
-    } catch (error) {
-      progressText.textContent = "실패: " + error.message;
-    } finally {
-      btnMake.disabled = frames.length < 2;
+      return new URL(`https://${trimmed}`).href;
+    } catch {
+      return "";
     }
+  }
+}
+
+function suggestFilename(url) {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "");
+    const safe = host.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/-+/g, "-");
+    return `qr-${safe || "code"}`;
+  } catch {
+    return "qr-code";
+  }
+}
+
+function sanitizeFilename(name) {
+  const base = name
+    .trim()
+    .replace(/\.jpe?g$/i, "")
+    .replace(/[<>:"/\\|?*\u0000-\u001f]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^[.-]+|[.-]+$/g, "");
+
+  return base || "qr-code";
+}
+
+function generateQr(url) {
+  if (typeof QRCode === "undefined") {
+    throw new Error("QR 라이브러리를 불러오지 못했습니다.");
+  }
+
+  qrHost.innerHTML = "";
+  qrInstance = new QRCode(qrHost, {
+    text: url,
+    width: QR_SIZE,
+    height: QR_SIZE,
+    colorDark: "#14201c",
+    colorLight: "#ffffff",
+    correctLevel: QRCode.CorrectLevel.M,
   });
-})();
+}
+
+function syncExportCanvas() {
+  const source =
+    qrHost.querySelector("canvas") || qrHost.querySelector("img");
+
+  if (!source) {
+    throw new Error("QR 이미지를 찾을 수 없습니다.");
+  }
+
+  const ctx = qrCanvas.getContext("2d");
+  qrCanvas.width = QR_SIZE;
+  qrCanvas.height = QR_SIZE;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, QR_SIZE, QR_SIZE);
+  ctx.drawImage(source, 0, 0, QR_SIZE, QR_SIZE);
+}
+
+function canvasToJpegBlob(canvas, quality = 0.95) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error("JPG 변환에 실패했습니다."));
+      },
+      "image/jpeg",
+      quality
+    );
+  });
+}
+
+async function saveWithPicker(blob, filename) {
+  if (typeof window.showSaveFilePicker === "function") {
+    const handle = await window.showSaveFilePicker({
+      suggestedName: filename,
+      types: [
+        {
+          description: "JPEG Image",
+          accept: { "image/jpeg": [".jpg", ".jpeg"] },
+        },
+      ],
+    });
+    const writable = await handle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+    return;
+  }
+
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = objectUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(objectUrl);
+}
+
+function setMode(mode) {
+  const isCreate = mode === "create";
+  createPanel.classList.toggle("is-active", isCreate);
+  scanPanel.classList.toggle("is-active", !isCreate);
+
+  modeTabs.forEach((tab) => {
+    tab.classList.toggle("is-active", tab.dataset.mode === mode);
+  });
+
+  if (isCreate) {
+    stopCameraScan();
+  }
+}
+
+function decodeImageData(imageData) {
+  if (typeof jsQR !== "function") {
+    throw new Error("스캔 라이브러리를 불러오지 못했습니다.");
+  }
+
+  const code = jsQR(imageData.data, imageData.width, imageData.height, {
+    inversionAttempts: "attemptBoth",
+  });
+
+  return code ? code.data : "";
+}
+
+function loadImageFromFile(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("이미지를 열 수 없습니다."));
+    };
+    image.src = url;
+  });
+}
+
+async function scanImageFile(file) {
+  const image = await loadImageFromFile(file);
+  const canvas = document.createElement("canvas");
+  const maxSide = 1200;
+  const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+
+  canvas.width = Math.max(1, Math.round(image.width * scale));
+  canvas.height = Math.max(1, Math.round(image.height * scale));
+
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+  const value = decodeImageData(
+    ctx.getImageData(0, 0, canvas.width, canvas.height)
+  );
+
+  if (!value) {
+    throw new Error("이미지에서 QR 코드를 찾지 못했습니다.");
+  }
+
+  showScanResult(value);
+}
+
+function showScanResult(value) {
+  lastScannedValue = value;
+  scanText.textContent = value;
+  scanResult.hidden = false;
+  scanResult.classList.add("is-visible");
+
+  try {
+    const parsed = new URL(value);
+    scanOpenLink.hidden = false;
+    scanOpenLink.href = parsed.href;
+  } catch {
+    scanOpenLink.hidden = true;
+    scanOpenLink.removeAttribute("href");
+  }
+}
+
+function setCameraStatus(message, type = "") {
+  cameraStatus.textContent = message;
+  cameraStatus.classList.remove("is-success", "is-error");
+  if (type) cameraStatus.classList.add(type);
+}
+
+function stopCameraScan() {
+  if (scanLoopId) {
+    cancelAnimationFrame(scanLoopId);
+    scanLoopId = 0;
+  }
+
+  if (cameraStream) {
+    cameraStream.getTracks().forEach((track) => track.stop());
+    cameraStream = null;
+  }
+
+  cameraVideo.srcObject = null;
+
+  if (cameraDialog.open) {
+    cameraDialog.close();
+  }
+}
+
+function tickCameraScan() {
+  if (!cameraStream || cameraVideo.readyState < 2) {
+    scanLoopId = requestAnimationFrame(tickCameraScan);
+    return;
+  }
+
+  const width = cameraVideo.videoWidth;
+  const height = cameraVideo.videoHeight;
+  if (!width || !height) {
+    scanLoopId = requestAnimationFrame(tickCameraScan);
+    return;
+  }
+
+  const ctx = cameraCanvas.getContext("2d", { willReadFrequently: true });
+  cameraCanvas.width = width;
+  cameraCanvas.height = height;
+  ctx.drawImage(cameraVideo, 0, 0, width, height);
+
+  try {
+    const value = decodeImageData(ctx.getImageData(0, 0, width, height));
+    if (value) {
+      setCameraStatus("QR 코드를 인식했습니다.", "is-success");
+      showScanResult(value);
+      stopCameraScan();
+      return;
+    }
+  } catch (error) {
+    console.error(error);
+    setCameraStatus("스캔 중 오류가 발생했습니다.", "is-error");
+    stopCameraScan();
+    return;
+  }
+
+  scanLoopId = requestAnimationFrame(tickCameraScan);
+}
+
+async function startCameraScan() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    setCameraStatus(
+      "이 환경에서는 카메라를 사용할 수 없습니다. 이미지 업로드를 이용해 주세요.",
+      "is-error"
+    );
+    cameraDialog.showModal();
+    return;
+  }
+
+  if (!window.isSecureContext && location.protocol !== "https:") {
+    // localhost는 secure context로 취급됨. file:// 등은 카메라가 막힐 수 있음.
+  }
+
+  stopCameraScan();
+  setCameraStatus("카메라 권한을 요청하는 중…");
+  cameraDialog.showModal();
+
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+    });
+
+    cameraVideo.srcObject = cameraStream;
+    await cameraVideo.play();
+    setCameraStatus("QR 코드를 비춰 주세요.");
+    scanLoopId = requestAnimationFrame(tickCameraScan);
+  } catch (error) {
+    console.error(error);
+    let message = "카메라를 열지 못했습니다.";
+
+    if (error && error.name === "NotAllowedError") {
+      message = "카메라 권한이 거부되었습니다. 브라우저 설정을 확인해 주세요.";
+    } else if (error && error.name === "NotFoundError") {
+      message = "사용 가능한 카메라를 찾지 못했습니다.";
+    } else if (!window.isSecureContext) {
+      message =
+        "카메라 스캔은 localhost 또는 HTTPS에서만 동작합니다. 이미지 업로드를 이용해 주세요.";
+    }
+
+    setCameraStatus(message, "is-error");
+  }
+}
+
+function openWindowsCameraApp() {
+  // Windows 기본 카메라 앱 프로토콜. 스캔 결과는 웹으로 돌아오지 않으므로
+  // 촬영 후 이미지 업로드로 이어지도록 안내합니다.
+  const link = document.createElement("a");
+  link.href = "microsoft.windows.camera:";
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  setCameraStatus(
+    "Windows 카메라 앱을 열었습니다. 촬영한 사진은 이미지 업로드로 스캔해 주세요.",
+    "is-success"
+  );
+}
+
+modeTabs.forEach((tab) => {
+  tab.addEventListener("click", () => setMode(tab.dataset.mode));
+});
+
+form.addEventListener("submit", (event) => {
+  event.preventDefault();
+
+  const url = normalizeUrl(urlInput.value);
+  if (!url) {
+    urlInput.setCustomValidity("올바른 URL을 입력해 주세요.");
+    urlInput.reportValidity();
+    return;
+  }
+
+  urlInput.setCustomValidity("");
+
+  try {
+    generateQr(url);
+    currentUrl = url;
+    qrUrl.textContent = url;
+    result.hidden = false;
+    result.classList.add("is-visible");
+    urlInput.value = url;
+  } catch (error) {
+    console.error(error);
+    alert("QR 코드를 만들지 못했습니다. URL을 다시 확인해 주세요.");
+  }
+});
+
+urlInput.addEventListener("input", () => {
+  urlInput.setCustomValidity("");
+});
+
+qrButton.addEventListener("click", () => {
+  if (!currentUrl) return;
+  filenameInput.value = suggestFilename(currentUrl);
+  saveDialog.showModal();
+  filenameInput.focus();
+  filenameInput.select();
+});
+
+saveForm.addEventListener("submit", async (event) => {
+  const submitter = event.submitter;
+  if (!submitter || submitter.value !== "save") return;
+
+  event.preventDefault();
+
+  const filename = `${sanitizeFilename(filenameInput.value)}.jpg`;
+
+  try {
+    syncExportCanvas();
+    const blob = await canvasToJpegBlob(qrCanvas);
+    await saveWithPicker(blob, filename);
+    saveDialog.close();
+  } catch (error) {
+    if (error && error.name === "AbortError") return;
+    console.error(error);
+    alert("저장에 실패했습니다. 다시 시도해 주세요.");
+  }
+});
+
+uploadScanBtn.addEventListener("click", () => {
+  scanFileInput.click();
+});
+
+scanFileInput.addEventListener("change", async () => {
+  const file = scanFileInput.files && scanFileInput.files[0];
+  scanFileInput.value = "";
+  if (!file) return;
+
+  try {
+    await scanImageFile(file);
+  } catch (error) {
+    console.error(error);
+    alert(error.message || "이미지를 스캔하지 못했습니다.");
+  }
+});
+
+cameraScanBtn.addEventListener("click", () => {
+  startCameraScan();
+});
+
+cameraCloseBtn.addEventListener("click", () => {
+  stopCameraScan();
+});
+
+openWindowsCameraBtn.addEventListener("click", () => {
+  openWindowsCameraApp();
+});
+
+cameraDialog.addEventListener("close", () => {
+  if (cameraStream) {
+    cameraStream.getTracks().forEach((track) => track.stop());
+    cameraStream = null;
+  }
+  if (scanLoopId) {
+    cancelAnimationFrame(scanLoopId);
+    scanLoopId = 0;
+  }
+  cameraVideo.srcObject = null;
+});
+
+scanCopyBtn.addEventListener("click", async () => {
+  if (!lastScannedValue) return;
+
+  try {
+    await navigator.clipboard.writeText(lastScannedValue);
+    scanCopyBtn.textContent = "복사됨";
+    setTimeout(() => {
+      scanCopyBtn.textContent = "복사";
+    }, 1200);
+  } catch {
+    alert("클립보드에 복사하지 못했습니다.");
+  }
+});
+
+window.addEventListener("beforeunload", () => {
+  stopCameraScan();
+});
