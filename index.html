@@ -6,10 +6,7 @@
     <title>Frame Lab — GIF 만들기</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap"
-      rel="stylesheet"
-    />
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -17,29 +14,18 @@
     <header class="topbar">
       <div class="brand">
         <span class="brand-mark">FL</span>
-        <div>
-          <p class="brand-kicker">브라우저에서 바로 만드는</p>
-          <h1>Frame Lab</h1>
-        </div>
+        <div><p class="brand-kicker">브라우저에서 바로 만드는</p><h1>Frame Lab</h1></div>
       </div>
-      <p class="topbar-note">이미지는 서버로 전송되지 않습니다.</p>
+      <p class="topbar-note">이미지와 영상은 서버로 전송되지 않습니다.</p>
     </header>
-
     <main class="layout">
       <section class="stage">
         <label class="dropzone" id="dropzone">
-          <input
-            id="file-input"
-            type="file"
-            accept="image/*,video/*"
-            multiple
-            hidden
-          />
+          <input id="file-input" type="file" accept="image/*,video/*" multiple hidden />
           <span class="dropzone-icon" aria-hidden="true">＋</span>
           <strong>이미지 또는 영상을 놓으세요</strong>
           <span>PNG, JPG, WEBP, GIF, MP4 · 여러 장 가능 · 클릭해서 선택</span>
         </label>
-
         <div class="toolbar">
           <button type="button" id="btn-add" class="ghost">프레임 추가</button>
           <button type="button" id="btn-sample" class="ghost">샘플 만들기</button>
@@ -47,69 +33,46 @@
           <button type="button" id="btn-clear" class="ghost danger">비우기</button>
           <span class="toolbar-meta" id="frame-count">프레임 0</span>
         </div>
-
+        <section class="video-range" id="video-range" hidden>
+          <div class="section-heading"><div><p class="eyebrow">VIDEO CLIP</p><h2>GIF로 만들 구간 선택</h2></div><span id="video-duration-label">전체 00:00</span></div>
+          <video id="source-video" controls playsinline preload="metadata"></video>
+          <div class="range-fields">
+            <label>시작 시간 <input id="range-start" type="number" min="0" step="0.1" value="0" /></label>
+            <label>종료 시간 <input id="range-end" type="number" min="0.1" step="0.1" value="0.1" /></label>
+          </div>
+          <div class="range-sliders">
+            <label>시작 위치 <input id="range-start-slider" type="range" min="0" max="1" step="0.1" value="0" /></label>
+            <label>종료 위치 <input id="range-end-slider" type="range" min="0" max="1" step="0.1" value="1" /></label>
+          </div>
+          <div class="range-summary"><span id="range-summary">선택 구간 0.0초</span><button type="button" id="btn-preview-range" class="ghost">선택 구간 미리보기</button></div>
+          <p class="hint">시작·종료 시간을 입력하거나 슬라이더를 움직여 구간을 정하세요. 선택한 구간만 GIF로 변환됩니다.</p>
+        </section>
         <div class="filmstrip" id="filmstrip" role="list" aria-label="프레임 목록"></div>
       </section>
-
       <aside class="panel">
         <div class="preview-card">
-          <div class="preview-head">
-            <h2>미리보기</h2>
-            <span id="preview-status">대기</span>
-          </div>
+          <div class="preview-head"><h2>미리보기</h2><span id="preview-status">대기</span></div>
           <div class="preview-stage" id="preview-stage">
             <canvas id="preview-canvas" width="480" height="320"></canvas>
             <p class="preview-empty" id="preview-empty">프레임을 넣으면 여기서 재생됩니다.</p>
           </div>
         </div>
-
         <form class="settings" id="settings">
-          <label>
-            가로 크기
-            <input id="opt-width" type="number" min="16" max="1280" value="480" />
-          </label>
-          <label>
-            맞춤 방식
-            <select id="opt-fit">
-              <option value="contain">여백 유지</option>
-              <option value="cover">화면 채우기</option>
-              <option value="stretch">늘이기</option>
-            </select>
-          </label>
-          <label>
-            프레임 간격 (ms)
-            <input id="opt-delay" type="number" min="20" max="2000" step="10" value="120" />
-          </label>
-          <label>
-            반복
-            <select id="opt-loop">
-              <option value="0">무한 반복</option>
-              <option value="1">1회</option>
-              <option value="3">3회</option>
-            </select>
-          </label>
-          <label>
-            배경색
-            <input id="opt-bg" type="color" value="#111111" />
-          </label>
-          <label class="check">
-            <input id="opt-dither" type="checkbox" />
-            디더링 (색 부드럽게)
-          </label>
+          <label>가로 크기 <input id="opt-width" type="number" min="16" max="1280" value="480" /></label>
+          <label>맞춤 방식 <select id="opt-fit"><option value="contain">여백 유지</option><option value="cover">화면 채우기</option><option value="stretch">늘이기</option></select></label>
+          <label>프레임 간격 (ms) <input id="opt-delay" type="number" min="20" max="2000" step="10" value="120" /></label>
+          <label>반복 <select id="opt-loop"><option value="0">무한 반복</option><option value="1">1회</option><option value="3">3회</option></select></label>
+          <label>배경색 <input id="opt-bg" type="color" value="#111111" /></label>
+          <label class="check"><input id="opt-dither" type="checkbox" /> 디더링 (색 부드럽게)</label>
         </form>
-
         <div class="export">
           <button type="button" id="btn-make" class="primary" disabled>GIF 만들기</button>
-          <div class="progress" hidden id="progress">
-            <div class="progress-bar" id="progress-bar"></div>
-            <span id="progress-text">인코딩 중</span>
-          </div>
+          <div class="progress" hidden id="progress"><div class="progress-bar" id="progress-bar"></div><span id="progress-text">인코딩 중</span></div>
           <img id="result-gif" class="result-gif" alt="생성된 GIF" hidden />
           <a id="download" class="download" hidden>GIF 다운로드</a>
         </div>
       </aside>
     </main>
-
     <script src="./encoder.js"></script>
     <script src="./app.js"></script>
   </body>
