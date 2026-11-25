@@ -226,6 +226,12 @@
         video.onloadedmetadata = resolve;
         video.onerror = function () { reject(new Error("추가할 영상 파일을 읽을 수 없습니다.")); };
       });
+      if (video.readyState < 2) {
+        await new Promise(function (resolve, reject) {
+          video.addEventListener("loadeddata", resolve, { once: true });
+          video.addEventListener("error", function () { reject(new Error("영상 데이터를 읽을 수 없습니다.")); }, { once: true });
+        });
+      }
       const duration = video.duration;
       if (!Number.isFinite(duration) || duration <= 0) throw new Error("영상 길이를 확인할 수 없습니다.");
       const delay = Math.max(20, Number($("opt-delay").value) || 120);
