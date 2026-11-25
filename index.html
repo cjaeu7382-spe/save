@@ -69,6 +69,17 @@
 <div class="range-summary"><span id="add-range-summary">추가할 구간</span><button type="button" id="btn-add-video-cancel" class="ghost">취소</button><button type="button" id="btn-add-video-confirm" class="primary">선택 구간 프레임 추가</button></div>
 <p class="hint">선택한 구간만 기존 GIF의 프레임에 추가됩니다.</p></section>
 <div class="filmstrip" id="filmstrip" role="list" aria-label="프레임 목록"></div>
+        <section class="text-editor" aria-label="프레임 텍스트 편집">
+          <div class="section-heading"><div><p class="eyebrow">FRAME TEXT</p><h2>선택한 프레임에 텍스트 추가</h2></div><span id="text-frame-label">프레임을 먼저 추가해 주세요.</span></div>
+          <label>표시할 문구 <textarea id="frame-text" rows="2" maxlength="120" placeholder="이 프레임에 표시할 문구를 입력하세요."></textarea></label>
+          <div class="text-editor-options">
+            <label>글자 크기 <input id="frame-text-size" type="number" min="10" max="160" value="36"></label>
+            <label>글자 색상 <input id="frame-text-color" type="color" value="#ffffff"></label>
+            <label>표시 위치 <select id="frame-text-position"><option value="top">위쪽</option><option value="center">가운데</option><option value="bottom" selected>아래쪽</option></select></label>
+          </div>
+          <div class="text-editor-actions"><button type="button" id="btn-text-apply" class="primary" disabled>선택 프레임에 적용</button><button type="button" id="btn-text-clear" class="ghost" disabled>텍스트 삭제</button></div>
+          <p class="hint">프레임 목록 또는 영상 프레임 미리보기에서 원하는 프레임을 선택한 뒤 적용하세요. 적용한 문구는 해당 프레임에만 표시됩니다.</p>
+        </section>
         <form class="settings" id="settings">
           <label>가로 크기 <input id="opt-width" type="number" min="16" max="1280" value="480" /></label>
           <label>맞춤 방식 <select id="opt-fit"><option value="contain">여백 유지</option><option value="cover">화면 채우기</option><option value="stretch">늘이기</option></select></label>
