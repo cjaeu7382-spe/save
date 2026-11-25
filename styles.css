@@ -431,3 +431,10 @@ h2 {
 .settings, .export { width: 100%; }
 #btn-preview-gif { width: 100%; }
 #btn-preview-gif[hidden] { display: none !important; }
+
+/* Layout: keep editor, settings, and export controls in one vertical column. */
+.layout {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+.stage { width: 100%; }
