@@ -24,7 +24,7 @@
   const frames = [];
   let dragFrom = null, previewTimer = 0, objectUrl = "", activeVideoUrl = "";
   let activeVideoDuration = 0, videoPreviewFrames = [], videoPreviewIndex = 0, videoPreviewDelay = 120, videoPreviewReady = false;
-  let pendingAddVideoFile = null, pendingAddVideoDuration = 0, ffmpegInstance = null;
+  let pendingAddVideoFile = null, pendingAddVideoDuration = 0, ffmpegInstance = null, gifuctModulePromise = null;
 
   function uid() { return Math.random().toString(36).slice(2); }
   function formatTime(seconds) {
@@ -335,7 +335,9 @@
               $("add-video-duration").textContent = "전체 " + formatTime(video.duration);
               $("add-range-start").value = "00:00:00";
               $("add-range-end").value = formatTime(video.duration);
-              $("add-range-summary").textContent = "선택 구간 00:00:00–" + formatTime(video.duration);
+              $("add-range-start-slider").min = 0; $("add-range-start-slider").max = video.duration; $("add-range-start-slider").step = Math.max(0.01, video.duration / 1000); $("add-range-start-slider").value = 0;
+              $("add-range-end-slider").min = 0; $("add-range-end-slider").max = video.duration; $("add-range-end-slider").step = Math.max(0.01, video.duration / 1000); $("add-range-end-slider").value = video.duration;
+              syncAddVideoRange("init");
               resolve();
             };
             video.onerror = function () { reject(new Error("추가할 영상 파일을 읽을 수 없습니다.")); };
@@ -352,11 +354,38 @@
       }
     } catch (error) { alert("프레임을 추가하지 못했습니다: " + error.message); }
   });
+  function syncAddVideoRange(source) {
+    if (!pendingAddVideoFile || !Number.isFinite(pendingAddVideoDuration)) return;
+    let start = parseTime($("add-range-start").value), end = parseTime($("add-range-end").value);
+    if (!Number.isFinite(start)) start = 0;
+    if (!Number.isFinite(end)) end = pendingAddVideoDuration;
+    if (source === "start-slider") start = Number($("add-range-start-slider").value);
+    if (source === "end-slider") end = Number($("add-range-end-slider").value);
+    start = Math.max(0, Math.min(start, Math.max(0, pendingAddVideoDuration - 0.05)));
+    end = Math.max(0.05, Math.min(end, pendingAddVideoDuration));
+    if (end <= start) {
+      if (source === "start-slider" || source === "add-range-start") end = Math.min(pendingAddVideoDuration, start + 0.05);
+      else start = Math.max(0, end - 0.05);
+    }
+    $("add-range-start").value = formatTime(start);
+    $("add-range-end").value = formatTime(end);
+    $("add-range-start-slider").value = start;
+    $("add-range-end-slider").value = end;
+    $("add-range-summary").textContent = "선택 구간 " + (end - start).toFixed(2) + "초 · " + formatTime(start) + "–" + formatTime(end);
+    $("btn-add-video-confirm").disabled = !(end > start && end <= pendingAddVideoDuration);
+  }
+  ["add-range-start", "add-range-end"].forEach(function (id) {
+    on(id, "change", function () { syncAddVideoRange(id); });
+    on(id, "keydown", function (event) { if (event.key === "Enter") { event.preventDefault(); syncAddVideoRange(id); } });
+  });
+  on("add-range-start-slider", "input", function () { syncAddVideoRange("start-slider"); });
+  on("add-range-end-slider", "input", function () { syncAddVideoRange("end-slider"); });
+
   on("btn-add-video-cancel", "click", function () {
     const video = $("add-video-source");
     if (video.dataset.objectUrl) URL.revokeObjectURL(video.dataset.objectUrl);
     video.pause(); video.removeAttribute("src"); video.load();
-    $("add-video-range").hidden = true; pendingAddVideoFile = null;
+    $("add-video-range").hidden = true; pendingAddVideoFile = null; pendingAddVideoDuration = 0;
   });
   on("btn-add-video-confirm", "click", async function () {
     if (!pendingAddVideoFile) return;
@@ -594,60 +623,107 @@
   on("convert-gif-input", "change", function () {
     const file = this.files && this.files[0];
     $("btn-gif-jpg").disabled = !file; $("btn-gif-mp4").disabled = !file;
-    $("converter-status").textContent = file ? file.name + " 선택됨" : "GIF 파일을 선택해 주세요.";
+    $("converter-status").textContent = file ? file.name + " 선택됨 · 변환 방식을 선택하세요." : "GIF 파일을 선택해 주세요.";
   });
+  async function loadGifuct() {
+    if (window.gifuct && window.gifuct.parseGIF && window.gifuct.decompressFrames) return window.gifuct;
+    if (!gifuctModulePromise) {
+      gifuctModulePromise = import("https://cdn.jsdelivr.net/npm/gifuct-js@2.1.2/+esm").then(function (mod) {
+        const api = { parseGIF: mod.parseGIF, decompressFrames: mod.decompressFrames };
+        if (!api.parseGIF || !api.decompressFrames) throw new Error("GIF 디코더 모듈의 함수를 찾을 수 없습니다.");
+        return api;
+      }).catch(function (error) {
+        gifuctModulePromise = null;
+        throw new Error("GIF 디코더를 불러오지 못했습니다: " + (error.message || error));
+      });
+    }
+    return gifuctModulePromise;
+  }
+  function triggerBlobDownload(blob, filename) {
+    if (!blob || !blob.size) throw new Error("변환 결과 파일이 비어 있습니다.");
+    const url = URL.createObjectURL(blob), link = document.createElement("a");
+    link.href = url; link.download = filename; link.style.display = "none";
+    document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+  }
   async function convertGifToJpg() {
     const file = $("convert-gif-input").files[0]; if (!file) return;
-    const status = $("converter-status"); $("btn-gif-jpg").disabled = true;
+    const status = $("converter-status"), button = $("btn-gif-jpg");
+    button.disabled = true; $("btn-gif-mp4").disabled = true;
     try {
-      if (!window.gifuct || !window.JSZip) throw new Error("JPG 변환 라이브러리를 불러오지 못했습니다. 새로고침해 주세요.");
-      const parsed = window.gifuct.parseGIF(await file.arrayBuffer());
-      const decoded = window.gifuct.decompressFrames(parsed, true);
-      const width = parsed.lsd.width, height = parsed.lsd.height;
+      status.textContent = "GIF 프레임 분석 중…";
+      const gifuct = await loadGifuct();
+      if (!window.JSZip) throw new Error("ZIP 라이브러리를 불러오지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.");
+      const parsed = gifuct.parseGIF(await file.arrayBuffer());
+      const decoded = gifuct.decompressFrames(parsed, true);
+      const width = Number(parsed.lsd && parsed.lsd.width), height = Number(parsed.lsd && parsed.lsd.height);
+      if (!width || !height || !decoded || !decoded.length) throw new Error("유효한 GIF 프레임을 찾지 못했습니다.");
       const canvas = document.createElement("canvas"); canvas.width = width; canvas.height = height;
-      const ctx = canvas.getContext("2d"), composite = document.createElement("canvas");
-      composite.width = width; composite.height = height;
-      const cctx = composite.getContext("2d"), zip = new JSZip();
+      const composite = document.createElement("canvas"); composite.width = width; composite.height = height;
+      const ctx = canvas.getContext("2d"), cctx = composite.getContext("2d"), zip = new JSZip();
+      const background = parsed.gct && parsed.gct[parsed.lsd.backgroundColorIndex];
       for (let i = 0; i < decoded.length; i++) {
-        const frame = decoded[i], patch = new ImageData(new Uint8ClampedArray(frame.patch), frame.dims.width, frame.dims.height);
-        const temp = document.createElement("canvas"); temp.width = frame.dims.width; temp.height = frame.dims.height;
-        temp.getContext("2d").putImageData(patch, 0, 0);
-        cctx.drawImage(temp, frame.dims.left, frame.dims.top);
-        ctx.clearRect(0, 0, width, height); ctx.drawImage(composite, 0, 0);
-        const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", 0.92));
+        const frame = decoded[i], dims = frame.dims;
+        if (!frame.patch || !dims || !dims.width || !dims.height) continue;
+        const previous = document.createElement("canvas");
+        if (frame.disposalType === 3) {
+          previous.width = width; previous.height = height;
+          previous.getContext("2d").drawImage(composite, 0, 0);
+        }
+        const patchCanvas = document.createElement("canvas"); patchCanvas.width = dims.width; patchCanvas.height = dims.height;
+        const patchCtx = patchCanvas.getContext("2d");
+        patchCtx.putImageData(new ImageData(new Uint8ClampedArray(frame.patch), dims.width, dims.height), 0, 0);
+        cctx.drawImage(patchCanvas, dims.left, dims.top);
+        ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, width, height); ctx.drawImage(composite, 0, 0);
+        const blob = await new Promise(function (resolve) { canvas.toBlob(resolve, "image/jpeg", 0.94); });
+        if (!blob) throw new Error("JPG 이미지 생성에 실패했습니다.");
         zip.file("frame-" + String(i + 1).padStart(4, "0") + ".jpg", blob);
         status.textContent = "JPG 프레임 변환 " + (i + 1) + " / " + decoded.length;
-        if (frame.disposalType === 2) cctx.clearRect(frame.dims.left, frame.dims.top, frame.dims.width, frame.dims.height);
+        if (frame.disposalType === 2) {
+          if (background && Array.isArray(background)) {
+            cctx.fillStyle = "rgb(" + background[0] + "," + background[1] + "," + background[2] + ")";
+            cctx.fillRect(dims.left, dims.top, dims.width, dims.height);
+          } else cctx.clearRect(dims.left, dims.top, dims.width, dims.height);
+        } else if (frame.disposalType === 3) cctx.drawImage(previous, 0, 0);
       }
-      const blob = await zip.generateAsync({ type: "blob" }), url = URL.createObjectURL(blob), link = document.createElement("a");
-      link.href = url; link.download = file.name.replace(/\.gif$/i, "") + "-jpg-frames.zip"; link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 30000);
-      status.textContent = "완료 · " + decoded.length + "장의 JPG를 ZIP으로 저장했습니다.";
-    } catch (error) { status.textContent = "JPG 변환 실패: " + error.message; }
-    finally { $("btn-gif-jpg").disabled = false; }
+      const blob = await zip.generateAsync({ type: "blob" });
+      triggerBlobDownload(blob, file.name.replace(/\.gif$/i, "") + "-jpg-frames.zip");
+      status.textContent = "완료 · " + decoded.length + "개 프레임을 JPG ZIP 파일로 저장했습니다.";
+    } catch (error) { status.textContent = "JPG 변환 실패: " + (error.message || error); }
+    finally { button.disabled = false; $("btn-gif-mp4").disabled = !$("convert-gif-input").files.length; }
   }
   async function convertGifToMp4() {
     const file = $("convert-gif-input").files[0]; if (!file) return;
-    const status = $("converter-status"), button = $("btn-gif-mp4"); button.disabled = true;
+    const status = $("converter-status"), button = $("btn-gif-mp4");
+    button.disabled = true; $("btn-gif-jpg").disabled = true;
     try {
-      if (!window.FFmpeg) throw new Error("MP4 변환 엔진을 불러오지 못했습니다. 새로고침해 주세요.");
+      if (!window.FFmpeg || !window.FFmpeg.createFFmpeg) throw new Error("MP4 변환 엔진을 불러오지 못했습니다. CDN 연결을 확인한 뒤 새로고침해 주세요.");
       if (!ffmpegInstance) {
-        status.textContent = "MP4 변환 엔진 준비 중…";
-        ffmpegInstance = window.FFmpeg.createFFmpeg({ log: false, corePath: "https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js" });
+        status.textContent = "MP4 변환 엔진 준비 중… 처음 실행할 때 다운로드에 시간이 걸릴 수 있습니다.";
+        ffmpegInstance = window.FFmpeg.createFFmpeg({
+          log: false,
+          corePath: "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js"
+        });
         await ffmpegInstance.load();
       }
       status.textContent = "GIF를 MP4로 변환 중…";
-      const inputName = "input.gif", outputName = "output.mp4";
+      const inputName = "input-" + Date.now() + ".gif";
+      const outputName = "output-" + Date.now() + ".mp4";
       ffmpegInstance.FS("writeFile", inputName, new Uint8Array(await file.arrayBuffer()));
-      await ffmpegInstance.run("-i", inputName, "-movflags", "faststart", "-pix_fmt", "yuv420p", "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2", outputName);
-      const data = ffmpegInstance.FS("readFile", outputName), blob = new Blob([data.buffer], { type: "video/mp4" });
-      const url = URL.createObjectURL(blob), link = document.createElement("a");
-      link.href = url; link.download = file.name.replace(/\.gif$/i, "") + ".mp4"; link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 30000);
+      await ffmpegInstance.run(
+        "-i", inputName, "-an", "-movflags", "+faststart",
+        "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2,format=yuv420p",
+        outputName
+      );
+      const data = ffmpegInstance.FS("readFile", outputName);
+      const blob = new Blob([new Uint8Array(data)], { type: "video/mp4" });
+      triggerBlobDownload(blob, file.name.replace(/\.gif$/i, "") + ".mp4");
       try { ffmpegInstance.FS("unlink", inputName); ffmpegInstance.FS("unlink", outputName); } catch (_) {}
       status.textContent = "MP4 변환 완료 · " + Math.round(blob.size / 1024) + " KB";
-    } catch (error) { status.textContent = "MP4 변환 실패: " + (error.message || error); }
-    finally { button.disabled = false; }
+    } catch (error) {
+      status.textContent = "MP4 변환 실패: " + (error.message || error) + " · GIF 파일 크기와 브라우저 메모리, CDN 연결을 확인해 주세요.";
+      ffmpegInstance = null;
+    } finally { button.disabled = false; $("btn-gif-jpg").disabled = !$("convert-gif-input").files.length; }
   }
   on("btn-gif-jpg", "click", convertGifToJpg);
   on("btn-gif-mp4", "click", convertGifToMp4);
