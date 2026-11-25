@@ -1,6 +1,11 @@
 (function () {
   "use strict";
   const $ = function (id) { return document.getElementById(id); };
+  function on(id, type, handler) {
+    const element = $(id);
+    if (element) element.addEventListener(type, handler);
+    return element;
+  }
   const fileInput = $("file-input"), dropzone = $("dropzone"), filmstrip = $("filmstrip");
   const frameCount = $("frame-count"), previewCanvas = $("preview-canvas"), previewEmpty = $("preview-empty");
   const previewStatus = $("preview-status"), btnMake = $("btn-make"), progress = $("progress");
@@ -231,10 +236,11 @@
     return { imageDatas: data, size: size, delay: frameDelay };
   }
   ["opt-width", "opt-delay", "opt-fit", "opt-bg"].forEach(function (id) {
-    $(id).addEventListener("input", restartPreview); $(id).addEventListener("change", restartPreview);
+    on(id, "input", restartPreview);
+    on(id, "change", restartPreview);
   });
-  $("btn-add").addEventListener("click", function () { fileInput.click(); });
-  $("btn-sample").addEventListener("click", async function () {
+  on("btn-add", "click", function () { if (fileInput) fileInput.click(); });
+  on("btn-sample", "click", async function () {
     clearVideo();
     const colors = ["#e8a45a", "#c46a3a", "#7d9a6f", "#d7c4a3", "#3d6b8a", "#f4efe6"], words = ["FRAME", "LAB", "MAKE", "A", "GIF", "NOW"];
     for (let i = 0; i < colors.length; i++) {
@@ -248,20 +254,28 @@
     }
     renderStrip(); restartPreview();
   });
-  fileInput.addEventListener("change", function () { addFiles(fileInput.files); fileInput.value = ""; });
-  ["dragenter", "dragover"].forEach(function (type) { dropzone.addEventListener(type, function (event) { event.preventDefault(); dropzone.classList.add("dragover"); }); });
-  ["dragleave", "drop"].forEach(function (type) { dropzone.addEventListener(type, function (event) { event.preventDefault(); dropzone.classList.remove("dragover"); }); });
-  dropzone.addEventListener("drop", function (event) { if (event.dataTransfer.files.length) addFiles(event.dataTransfer.files); });
-  $("btn-reverse").addEventListener("click", function () { if (activeVideoUrl) return; frames.reverse(); renderStrip(); restartPreview(); });
-  $("btn-clear").addEventListener("click", function () {
-    clearInterval(previewTimer); clearVideo(); clearFrames(); previewStatus.textContent = "대기";
-    download.hidden = true; resultGif.hidden = true; updateCount(); restartPreview();
+  if (fileInput) on("file-input", "change", function () { addFiles(fileInput.files); fileInput.value = ""; });
+  if (dropzone) {
+    ["dragenter", "dragover"].forEach(function (type) {
+      dropzone.addEventListener(type, function (event) { event.preventDefault(); dropzone.classList.add("dragover"); });
+    });
+    ["dragleave", "drop"].forEach(function (type) {
+      dropzone.addEventListener(type, function (event) { event.preventDefault(); dropzone.classList.remove("dragover"); });
+    });
+    dropzone.addEventListener("drop", function (event) { if (event.dataTransfer.files.length) addFiles(event.dataTransfer.files); });
+  }
+  on("btn-reverse", "click", function () { if (activeVideoUrl) return; frames.reverse(); renderStrip(); restartPreview(); });
+  on("btn-clear", "click", function () {
+    clearInterval(previewTimer); clearVideo(); clearFrames(); if (previewStatus) previewStatus.textContent = "대기";
+    if (download) download.hidden = true;
+    if (resultGif) resultGif.hidden = true;
+    updateCount(); restartPreview();
   });
-  ["range-start", "range-end"].forEach(function (id) { $(id).addEventListener("input", function () { syncRange(id); }); });
-  $("range-start-slider").addEventListener("input", function () { syncRange("start-slider"); });
-  $("range-end-slider").addEventListener("input", function () { syncRange("end-slider"); });
-  $("btn-preview-range").addEventListener("click", async function () {
-    if (!validVideoRange()) return;
+  ["range-start", "range-end"].forEach(function (id) { on(id, "input", function () { syncRange(id); }); });
+  on("range-start-slider", "input", function () { syncRange("start-slider"); });
+  on("range-end-slider", "input", function () { syncRange("end-slider"); });
+  on("btn-preview-range", "click", async function () {
+    if (!validVideoRange() || !sourceVideo) return;
     sourceVideo.pause(); await seekVideo(Number($("range-start").value)); sourceVideo.play();
     const stopAt = Number($("range-end").value);
     const check = function () { if (sourceVideo.currentTime >= stopAt) { sourceVideo.pause(); sourceVideo.currentTime = Number($("range-start").value); sourceVideo.removeEventListener("timeupdate", check); } };
