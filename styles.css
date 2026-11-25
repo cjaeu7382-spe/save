@@ -408,3 +408,26 @@ h2 {
 .range-fields input { font-variant-numeric: tabular-nums; letter-spacing: .04em; }
 #btn-preview-gif { width: 100%; }
 #btn-preview-gif:disabled { opacity: .4; cursor: not-allowed; }
+
+.video-frame-preview {
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(13, 11, 9, 0.65);
+}
+.video-frame-preview[hidden] { display: none !important; }
+.frame-preview-heading, .frame-preview-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.frame-preview-heading { margin-bottom: 12px; font-size: 13px; }
+.frame-preview-heading span, #video-frame-time { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+#video-preview-canvas { display: block; width: 100%; max-height: 420px; object-fit: contain; border-radius: 12px; background: #080706; }
+.frame-preview-controls { margin-top: 12px; }
+.frame-preview-controls button:disabled { opacity: .35; cursor: not-allowed; }
+.settings, .export { width: 100%; }
+#btn-preview-gif { width: 100%; }
+#btn-preview-gif[hidden] { display: none !important; }
