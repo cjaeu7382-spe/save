@@ -681,6 +681,12 @@
         }
       } else {
         size = outputSize(frames[0].source);
+        if (currentMode === "edit") {
+          const first=frames[0].source, sw=first.naturalWidth||first.width, sh=first.naturalHeight||first.height;
+          const width=Math.max(16,Math.min(1280,Number($("edit-resize-width").value)||sw));
+          const heightValue=Number($("edit-resize-height").value)||0;
+          size={width:width,height:Math.max(16,Math.min(1280,heightValue||Math.round(width*sh/sw)))};
+        }
         const fit = $("opt-fit").value, bg = $("opt-bg").value;
         const canvas = document.createElement("canvas"); canvas.width = size.width; canvas.height = size.height;
         const ctx = canvas.getContext("2d", { willReadFrequently: true }); imageDatas = [];
@@ -690,8 +696,9 @@
         }
       }
       if (currentMode === "edit" && editSpeedFactor !== 1) exportDelay = Math.max(20, Math.round(exportDelay / editSpeedFactor));
+      const perFrameDelays = currentMode === "edit" ? frames.map(f => Math.max(20,Math.round((Number(f.delay)||exportDelay)/(editSpeedFactor||1)))) : null;
       const blob = await window.GifLab.encodeGif(imageDatas, {
-        width: size.width, height: size.height, delay: exportDelay,
+        width: size.width, height: size.height, delay: exportDelay, delays: perFrameDelays,
         loop: Number($("opt-loop").value), dither: $("opt-dither").checked
       }, function (ratio) {
         const offset = activeVideoUrl ? 0.35 : 0;
@@ -1112,20 +1119,27 @@
     updateEditToolsStatus("Reverse 완료 · 프레임 순서를 반대로 변경했습니다.");
   }
   function optimizeEditFrames() {
-    if (frames.length<2) return;
-    const before=frames.length, seen=new Set();
-    for (let i=frames.length-1;i>=0;i--) {
-      const f=frames[i], src=f.source, w=src.naturalWidth||src.width, h=src.naturalHeight||src.height;
-      const cv=document.createElement("canvas"); cv.width=w; cv.height=h;
-      const cx=cv.getContext("2d"); cx.drawImage(src,0,0,w,h);
-      const data=cx.getImageData(0,0,w,h).data;
-      let hash=w+"x"+h+":", step=Math.max(4,Math.floor(data.length/2048/4)*4);
-      for(let p=0;p<data.length;p+=step) hash+=data[p]+","+data[p+1]+","+data[p+2]+";";
-      if(seen.has(hash)) { frames.splice(i,1); } else seen.add(hash);
+    if(frames.length<2)return;
+    let removed=0;
+    function samePixels(a,b){
+      const ca=document.createElement("canvas"),cb=document.createElement("canvas");
+      const sa=a.source,sb=b.source,wa=sa.naturalWidth||sa.width,ha=sa.naturalHeight||sa.height,wb=sb.naturalWidth||sb.width,hb=sb.naturalHeight||sb.height;
+      if(wa!==wb||ha!==hb)return false;
+      ca.width=cb.width=wa;ca.height=cb.height=ha;
+      const xa=ca.getContext("2d"),xb=cb.getContext("2d");xa.drawImage(sa,0,0);xb.drawImage(sb,0,0);
+      const da=xa.getImageData(0,0,wa,ha).data,db=xb.getImageData(0,0,wa,ha).data;
+      for(let i=0;i<da.length;i++)if(da[i]!==db[i])return false;
+      return true;
+    }
+    for(let i=frames.length-1;i>0;i--){
+      if(samePixels(frames[i-1],frames[i])){
+        frames[i-1].delay=(Number(frames[i-1].delay)||Number($("opt-delay").value)||100)+(Number(frames[i].delay)||Number($("opt-delay").value)||100);
+        frames.splice(i,1);removed++;
+      }
     }
     selectedFrameIndex=Math.min(selectedFrameIndex,Math.max(0,frames.length-1));
-    renderStrip(); restartPreview();
-    updateEditToolsStatus("Optimize 완료 · 완전히 동일한 이미지 프레임 " + (before-frames.length) + "개를 정리했습니다. 색상 재인코딩 과정에서 미세한 차이가 생길 수 있습니다.");
+    renderStrip();restartPreview();
+    updateEditToolsStatus("Optimize 완료 · 화면이 완전히 동일한 연속 프레임 "+removed+"개 제거. 프레임 표시 시간은 유지하도록 합쳤습니다.");
   }
   async function convertEditedFrames() {
     const format=$("edit-format").value;
