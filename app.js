@@ -5,7 +5,18 @@
   const frameCount = $("frame-count"), previewCanvas = $("preview-canvas"), previewEmpty = $("preview-empty");
   const previewStatus = $("preview-status"), btnMake = $("btn-make"), progress = $("progress");
   const progressBar = $("progress-bar"), progressText = $("progress-text"), download = $("download");
-  const resultGif = $("result-gif"), videoRange = $("video-range"), sourceVideo = $("source-video");
+  const resultGif = $("result-gif"), videoRange = $("video-range");
+  // Recover gracefully if an older/cached HTML page is missing the video element.
+  let sourceVideo = $("source-video");
+  if (!sourceVideo && videoRange) {
+    sourceVideo = document.createElement("video");
+    sourceVideo.id = "source-video";
+    sourceVideo.controls = true;
+    sourceVideo.playsInline = true;
+    sourceVideo.preload = "metadata";
+    const rangeFields = videoRange.querySelector(".range-fields");
+    videoRange.insertBefore(sourceVideo, rangeFields || null);
+  }
   const frames = [];
   let dragFrom = null, previewTimer = 0, previewIndex = 0, objectUrl = "", activeVideoUrl = "";
   let activeVideoDuration = 0;
@@ -77,8 +88,12 @@
   function clearVideo() {
     if (activeVideoUrl) URL.revokeObjectURL(activeVideoUrl);
     activeVideoUrl = ""; activeVideoDuration = 0;
-    sourceVideo.pause(); sourceVideo.removeAttribute("src"); sourceVideo.load();
-    videoRange.hidden = true;
+    if (sourceVideo) {
+      sourceVideo.pause();
+      sourceVideo.removeAttribute("src");
+      sourceVideo.load();
+    }
+    if (videoRange) videoRange.hidden = true;
   }
   function clearFrames() {
     frames.forEach(function (frame) { if (frame.revokeThumb) URL.revokeObjectURL(frame.thumb); });
