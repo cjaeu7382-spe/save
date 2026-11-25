@@ -527,3 +527,11 @@ h2 {
   max-width: 100%;
   object-fit: contain;
 }
+
+/* Separate GIF creation and existing-GIF editing workspaces. */
+.mode-tabs { display:flex; gap:10px; margin:18px 0 4px; }
+.mode-tab { flex:1; min-height:46px; border:1px solid var(--line); background:rgba(29,24,20,.78); color:var(--muted); font-weight:600; }
+.mode-tab.active { color:#1a120c; border-color:transparent; background:linear-gradient(135deg,var(--accent),var(--accent-2)); }
+.editor-upload-panel { margin:14px 0; }
+.editor-upload-panel[hidden], #generator-source-panel[hidden], #frame-workspace[hidden] { display:none !important; }
+.editor-dropzone { min-height:150px; }
