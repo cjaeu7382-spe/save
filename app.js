@@ -213,46 +213,22 @@
     return result;
   }
 
-  function rotateSelectedFrames(direction) {
-    const isVideo = !!activeVideoUrl;
-    const scope = $("rotate-scope").value;
-    if (isVideo) {
-      if (!videoPreviewFrames.length) return;
-      const indexes = scope === "all"
-        ? videoPreviewFrames.map(function (_, index) { return index; })
-        : [videoPreviewIndex];
-      indexes.forEach(function (index) {
-        const original = videoPreviewFrames[index];
-        if (original) videoPreviewFrames[index] = rotateVideoImageData(original, direction);
-      });
-      showVideoPreviewFrame();
-    } else {
-      if (!frames.length) return;
-      const indexes = scope === "all"
-        ? frames.map(function (_, index) { return index; })
-        : [selectedFrameIndex];
-      indexes.forEach(function (index) {
-        const frame = frames[index];
-        if (!frame) return;
-        const source = frame.source;
-        const width = source.videoWidth || source.naturalWidth || source.width;
-        const height = source.videoHeight || source.naturalHeight || source.height;
-        const rotated = document.createElement("canvas");
-        rotated.width = height; rotated.height = width;
-        const ctx = rotated.getContext("2d");
-        ctx.translate(rotated.width / 2, rotated.height / 2);
-        ctx.rotate(direction * Math.PI / 2);
-        ctx.drawImage(source, -width / 2, -height / 2);
-        frame.source = rotated;
-        frame.thumb = rotated.toDataURL("image/png");
-        frame.textBaseSource = null;
-        frame.textOverlay = null;
-      });
-      renderStrip();
-      restartPreview();
-    }
-    updateTextEditor();
+  function transformFrameCanvas(source, rotation, flipX, flipY) {
+    const sw=source.videoWidth||source.naturalWidth||source.width, sh=source.videoHeight||source.naturalHeight||source.height;
+    const swap=Math.abs(rotation)%180===90, canvas=document.createElement("canvas");
+    canvas.width=swap?sh:sw; canvas.height=swap?sw:sh;
+    const ctx=canvas.getContext("2d"); ctx.translate(canvas.width/2,canvas.height/2);
+    ctx.rotate(rotation*Math.PI/180); ctx.scale(flipX?-1:1,flipY?-1:1);
+    ctx.drawImage(source,-sw/2,-sh/2); return canvas;
   }
+  function transformSelectedFrames(rotation,flipX,flipY) {
+    const scope=$("rotate-scope").value;
+    const indexes=scope==="all"?frames.map((_,i)=>i):[selectedFrameIndex];
+    indexes.forEach(i=>{const f=frames[i];if(!f)return;const canvas=transformFrameCanvas(f.source,rotation||0,!!flipX,!!flipY);f.source=canvas;f.thumb=canvas.toDataURL("image/png");f.textBaseSource=null;f.textOverlay=null;});
+    renderStrip(); restartPreview(); updateTextEditor();
+    updateEditToolsStatus("변환 적용 완료 · "+(scope==="all"?"전체 프레임":"선택 프레임"));
+  }
+  function rotateSelectedFrames(direction) { transformSelectedFrames(direction*90,false,false); }
   function updateTextEditor() {
     const label = $("text-frame-label");
     if (!label) return;
@@ -677,7 +653,7 @@
           imageDatas.push(ctx.getImageData(0, 0, size.width, size.height));
         }
       }
-      const blob = await window.GifLab.encodeGif(imageDatas, {
+      if (currentMode === "edit" && editSpeedFactor !== 1) exportDelay = Math.max(20, Math.round(exportDelay / editSpeedFactor));\n      const blob = await window.GifLab.encodeGif(imageDatas, {
         width: size.width, height: size.height, delay: exportDelay,
         loop: Number($("opt-loop").value), dither: $("opt-dither").checked
       }, function (ratio) {
@@ -1046,21 +1022,40 @@
     if (el) el.textContent = message;
   }
   function cropAllFrames() {
-    if (!frames.length || activeVideoUrl) { updateEditToolsStatus("GIF 편집 모드에서 업로드한 프레임에 사용할 수 있습니다."); return; }
-    const xPct = Math.max(0, Math.min(99, Number($("crop-x").value) || 0));
-    const yPct = Math.max(0, Math.min(99, Number($("crop-y").value) || 0));
-    const wPct = Math.max(1, Math.min(100 - xPct, Number($("crop-w").value) || 100));
-    const hPct = Math.max(1, Math.min(100 - yPct, Number($("crop-h").value) || 100));
-    frames.forEach(function(frame) {
-      const src = frame.source, sw = src.naturalWidth || src.width, sh = src.naturalHeight || src.height;
-      const sx = Math.round(sw*xPct/100), sy = Math.round(sh*yPct/100);
-      const cw = Math.max(1, Math.round(sw*wPct/100)), ch = Math.max(1, Math.round(sh*hPct/100));
-      const canvas=document.createElement("canvas"); canvas.width=cw; canvas.height=ch;
-      canvas.getContext("2d").drawImage(src,sx,sy,cw,ch,0,0,cw,ch);
-      frame.source=canvas; frame.thumb=canvas.toDataURL("image/png"); frame.textBaseSource=null; frame.textOverlay=null;
+    if(!frames.length||activeVideoUrl)return;
+    const ratio=$("crop-ratio").value, mode=$("crop-fill-mode").value, color=$("crop-fill-color").value;
+    frames.forEach(frame=>{
+      const src=frame.source,sw=src.naturalWidth||src.width,sh=src.naturalHeight||src.height;
+      let rw=sw,rh=sh;
+      if(ratio!=="original"){const p=ratio.split(":").map(Number);if(sw/sh>p[0]/p[1])rw=sh*p[0]/p[1];else rh=sw*p[1]/p[0];}
+      const canvas=document.createElement("canvas");canvas.width=Math.max(1,Math.round(rw));canvas.height=Math.max(1,Math.round(rh));
+      const ctx=canvas.getContext("2d");
+      if(mode==="solid"){ctx.fillStyle=color;ctx.fillRect(0,0,canvas.width,canvas.height);const scale=Math.min(canvas.width/sw,canvas.height/sh);const dw=sw*scale,dh=sh*scale;ctx.drawImage(src,(canvas.width-dw)/2,(canvas.height-dh)/2,dw,dh);}
+      else {const scale=Math.max(canvas.width/sw,canvas.height/sh);const dw=sw*scale,dh=sh*scale;ctx.drawImage(src,(canvas.width-dw)/2,(canvas.height-dh)/2,dw,dh);}
+      frame.source=canvas;frame.thumb=canvas.toDataURL("image/png");frame.textBaseSource=null;frame.textOverlay=null;
     });
-    renderStrip(); restartPreview();
-    updateEditToolsStatus("Crop 적용 완료 · " + wPct + "% × " + hPct + "% 영역을 모든 프레임에 적용했습니다.");
+    renderStrip();restartPreview();updateEditToolsStatus("Crop 적용 완료 · "+ratio+" · "+(mode==="solid"?"단색 배경":"확대 채우기"));
+  }
+  function applyDownsizing() {
+    if(!frames.length)return;
+    if($("downsize-frames").checked){
+      const step=Number($("downsize-frame-step").value)||2;
+      const kept=frames.filter((_,i)=>i%step===0);
+      frames.splice(0,frames.length,...kept);
+    }
+    const sizeScale=$("downsize-size").checked?(Number($("edit-downsize").value)||1):1;
+    const resolutionScale=$("downsize-resolution").checked?(Number($("downsize-resolution-scale").value)||1):1;
+    if(sizeScale!==1||resolutionScale!==1){
+      const factor=sizeScale*resolutionScale;
+      frames.forEach(f=>{
+        const src=f.source,sw=src.naturalWidth||src.width,sh=src.naturalHeight||src.height;
+        const cv=document.createElement("canvas");cv.width=Math.max(1,Math.round(sw*factor));cv.height=Math.max(1,Math.round(sh*factor));
+        cv.getContext("2d").drawImage(src,0,0,cv.width,cv.height);f.source=cv;f.thumb=cv.toDataURL("image/png");
+      });
+    }
+    selectedFrameIndex=Math.min(selectedFrameIndex,Math.max(0,frames.length-1));
+    renderStrip();restartPreview();
+    updateEditToolsStatus("Downsizing 적용 완료 · 현재 "+frames.length+"개 프레임");
   }
   function cutFrames() {
     if (frames.length < 2) return;
@@ -1124,7 +1119,7 @@
     resultGif.hidden=true;
     updateEditToolsStatus("변환 완료 · " + frames.length + "개 프레임 · " + Math.round(blob.size/1024) + " KB");
   }
-  on("btn-crop-apply","click",cropAllFrames);
+  on("btn-crop-apply","click",cropAllFrames);\n  on("btn-downsize","click",applyDownsizing);\n  on("btn-rotate-90","click",()=>transformSelectedFrames(90,false,false));\n  on("btn-rotate-180","click",()=>transformSelectedFrames(180,false,false));\n  on("btn-rotate-270","click",()=>transformSelectedFrames(270,false,false));\n  on("btn-flip-horizontal","click",()=>transformSelectedFrames(0,true,false));\n  on("btn-flip-vertical","click",()=>transformSelectedFrames(0,false,true));
   on("btn-cut-apply","click",cutFrames);
   on("btn-edit-reverse","click",reverseEditFrames);
   on("btn-optimize","click",optimizeEditFrames);
