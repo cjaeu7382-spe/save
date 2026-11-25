@@ -540,3 +540,11 @@ h2 {
 .editor-tools[hidden] { display:none !important; }
 .editor-tools .text-editor, .editor-tools .rotation-editor, .editor-tools .settings { margin:0; }
 .editor-tools .settings { display:grid; }
+
+.tool-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:11px; margin-top:12px; }
+.tool-grid label { display:grid; gap:6px; color:var(--muted); font-size:12px; }
+.tool-grid input,.tool-grid select { width:100%; min-width:0; border:1px solid var(--line); border-radius:10px; padding:9px 10px; background:#151210; color:var(--ink); font:inherit; }
+.tool-grid small { color:var(--muted); font-size:10px; }
+.tool-actions { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); }
+.tool-actions button { width:100%; }
+@media(max-width:560px) { .tool-grid { grid-template-columns:1fr 1fr; } .tool-actions { grid-template-columns:1fr 1fr; } }
