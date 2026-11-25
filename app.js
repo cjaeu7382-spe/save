@@ -128,6 +128,31 @@
     });
     ctx.restore();
   }
+  function bakeTextOnFrame(frame, isVideo, overlay, videoIndex) {
+    if (isVideo) {
+      const base = frame.textBaseData || new ImageData(new Uint8ClampedArray(frame.data), frame.width, frame.height);
+      const canvas = document.createElement("canvas"); canvas.width = base.width; canvas.height = base.height;
+      const ctx = canvas.getContext("2d"); ctx.putImageData(base, 0, 0);
+      drawTextOverlay(ctx, overlay, canvas.width, canvas.height);
+      const baked = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      baked.textBaseData = base;
+      videoPreviewFrames[videoIndex] = baked;
+      return baked;
+    }
+    const base = frame.textBaseSource || frame.source;
+    const width = base.videoWidth || base.naturalWidth || base.width;
+    const height = base.videoHeight || base.naturalHeight || base.height;
+    const canvas = document.createElement("canvas"); canvas.width = width; canvas.height = height;
+    const ctx = canvas.getContext("2d"); ctx.drawImage(base, 0, 0, width, height);
+    const targetWidth = outputSize(base).width;
+    const scaled = Object.assign({}, overlay, { fontSize: Math.max(10, Number(overlay.fontSize) * width / targetWidth) });
+    drawTextOverlay(ctx, scaled, width, height);
+    frame.textBaseSource = base;
+    frame.source = canvas;
+    frame.thumb = canvas.toDataURL("image/png");
+    frame.textOverlay = overlay;
+    return frame;
+  }
   function updateTextEditor() {
     const label = $("text-frame-label");
     if (!label) return;
@@ -141,6 +166,7 @@
     $("frame-text-size").value = overlay ? overlay.fontSize : 36;
     $("frame-text-color").value = overlay ? overlay.color : "#ffffff";
     $("frame-text-position").value = overlay ? overlay.position : "bottom";
+    $("btn-text-apply").textContent = overlay ? "텍스트 수정 적용" : "선택 프레임에 적용";
     $("btn-text-apply").disabled = !frame;
     $("btn-text-clear").disabled = !overlay;
   }
@@ -544,14 +570,6 @@
           imageDatas.push(ctx.getImageData(0, 0, size.width, size.height));
         }
       }
-      imageDatas = imageDatas.map(function (imageData, index) {
-        const sourceFrame = activeVideoUrl ? imageData : frames[index];
-        if (!sourceFrame || !sourceFrame.textOverlay) return imageData;
-        const overlayCanvas = document.createElement("canvas"); overlayCanvas.width = imageData.width; overlayCanvas.height = imageData.height;
-        const overlayCtx = overlayCanvas.getContext("2d"); overlayCtx.putImageData(imageData, 0, 0);
-        drawTextOverlay(overlayCtx, sourceFrame.textOverlay, imageData.width, imageData.height);
-        return overlayCtx.getImageData(0, 0, imageData.width, imageData.height);
-      });
       const blob = await window.GifLab.encodeGif(imageDatas, {
         width: size.width, height: size.height, delay: exportDelay,
         loop: Number($("opt-loop").value), dither: $("opt-dither").checked
@@ -579,7 +597,8 @@
     const imageData = videoPreviewFrames[videoPreviewIndex];
     canvas.width = imageData.width;
     canvas.height = imageData.height;
-    canvas.getContext("2d").putImageData(imageData, 0, 0);
+    const previewCtx = canvas.getContext("2d"); previewCtx.putImageData(imageData, 0, 0);
+    updateTextEditor();
     $("video-frame-count").textContent = (videoPreviewIndex + 1) + " / " + videoPreviewFrames.length;
     const start = parseTime($("range-start").value);
     $("video-frame-time").textContent = formatTime(start + videoPreviewIndex * videoPreviewDelay / 1000);
@@ -604,7 +623,6 @@
       temp.width = imageData.width; temp.height = imageData.height;
       temp.getContext("2d").putImageData(imageData, 0, 0);
       ctx.drawImage(temp, 0, 0, canvas.width, canvas.height);
-      if (imageData.textOverlay) drawTextOverlay(ctx, imageData.textOverlay, canvas.width, canvas.height);
       const label = document.createElement("span");
       label.textContent = "프레임 " + (index + 1);
       const remove = document.createElement("button");
@@ -648,19 +666,35 @@
     if (videoPreviewIndex < videoPreviewFrames.length - 1) { videoPreviewIndex++; showVideoPreviewFrame(); }
   });
   on("btn-text-apply", "click", function () {
-    const frame = activeVideoUrl ? videoPreviewFrames[videoPreviewIndex] : frames[selectedFrameIndex];
+    const isVideo = !!activeVideoUrl;
+    const index = isVideo ? videoPreviewIndex : selectedFrameIndex;
+    const frame = isVideo ? videoPreviewFrames[index] : frames[index];
     if (!frame) return;
     const value = $("frame-text").value.trim();
     if (!value) { alert("추가할 문구를 입력해 주세요."); return; }
-    frame.textOverlay = { text: value, fontSize: Number($("frame-text-size").value) || 36, color: $("frame-text-color").value, position: $("frame-text-position").value };
-    if (activeVideoUrl) showVideoPreviewFrame(); else renderStrip();
+    const overlay = { text: value, fontSize: Number($("frame-text-size").value) || 36, color: $("frame-text-color").value, position: $("frame-text-position").value };
+    if (isVideo) { bakeTextOnFrame(frame, true, overlay, index); showVideoPreviewFrame(); }
+    else { bakeTextOnFrame(frame, false, overlay, index); renderStrip(); }
     updateTextEditor();
   });
   on("btn-text-clear", "click", function () {
-    const frame = activeVideoUrl ? videoPreviewFrames[videoPreviewIndex] : frames[selectedFrameIndex];
+    const isVideo = !!activeVideoUrl;
+    const index = isVideo ? videoPreviewIndex : selectedFrameIndex;
+    const frame = isVideo ? videoPreviewFrames[index] : frames[index];
     if (!frame) return;
+    if (isVideo) {
+      if (frame.textBaseData) videoPreviewFrames[index] = frame.textBaseData;
+    } else if (frame.textBaseSource) {
+      frame.source = frame.textBaseSource; frame.thumb = frame.textBaseSource === frame.source ? frame.thumb : frame.thumb;
+      const source = frame.textBaseSource;
+      const canvas = document.createElement("canvas"); canvas.width = source.videoWidth || source.naturalWidth || source.width; canvas.height = source.videoHeight || source.naturalHeight || source.height;
+      canvas.getContext("2d").drawImage(source, 0, 0, canvas.width, canvas.height);
+      frame.thumb = canvas.toDataURL("image/png");
+      frame.source = source;
+      delete frame.textBaseSource;
+    }
     delete frame.textOverlay;
-    if (activeVideoUrl) showVideoPreviewFrame(); else renderStrip();
+    if (isVideo) showVideoPreviewFrame(); else renderStrip();
     updateTextEditor();
   });
   on("btn-preview-gif", "click", async function () {
