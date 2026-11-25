@@ -42,7 +42,7 @@
   function updateCount() {
     const count = activeVideoUrl ? "영상 구간 선택" : "프레임 " + frames.length;
     frameCount.textContent = count;
-    btnMake.disabled = activeVideoUrl ? !validVideoRange() : frames.length < 2;
+    btnMake.disabled = activeVideoUrl ? (!validVideoRange() || (videoPreviewFrames.length > 0 && videoPreviewFrames.length < 2)) : frames.length < 2;
     const previewButton = $("btn-preview-gif");
     if (previewButton) {
       previewButton.hidden = !activeVideoUrl;
@@ -68,6 +68,8 @@
     }
     videoPreviewFrames = [];
     $("video-frame-preview").hidden = true;
+    const videoStrip = $("video-frame-strip");
+    if (videoStrip) videoStrip.innerHTML = "";
     $("range-start").value = formatTime(start);
     $("range-end").value = formatTime(end);
     $("range-start-slider").value = start;
@@ -299,8 +301,14 @@
     try {
       let imageDatas, size, exportDelay = Number($("opt-delay").value) || 120;
       if (activeVideoUrl) {
-        const extracted = await extractVideoFrames();
-        imageDatas = extracted.imageDatas; size = extracted.size; exportDelay = extracted.delay;
+        if (videoPreviewFrames.length) {
+          imageDatas = videoPreviewFrames;
+          size = { width: imageDatas[0].width, height: imageDatas[0].height };
+          exportDelay = videoPreviewDelay;
+        } else {
+          const extracted = await extractVideoFrames();
+          imageDatas = extracted.imageDatas; size = extracted.size; exportDelay = extracted.delay;
+        }
       } else {
         size = outputSize(frames[0].source);
         const fit = $("opt-fit").value, bg = $("opt-bg").value;
@@ -344,6 +352,60 @@
     $("video-frame-time").textContent = formatTime(start + videoPreviewIndex * videoPreviewDelay / 1000);
     $("btn-frame-prev").disabled = videoPreviewIndex === 0;
     $("btn-frame-next").disabled = videoPreviewIndex >= videoPreviewFrames.length - 1;
+    renderVideoFrameStrip();
+  }
+  function renderVideoFrameStrip() {
+    const strip = $("video-frame-strip");
+    if (!strip) return;
+    strip.innerHTML = "";
+    videoPreviewFrames.forEach(function (imageData, index) {
+      const item = document.createElement("div");
+      item.className = "video-frame-thumb" + (index === videoPreviewIndex ? " active" : "");
+      item.draggable = true;
+      const canvas = document.createElement("canvas");
+      const scale = Math.min(1, 112 / imageData.width, 72 / imageData.height);
+      canvas.width = Math.max(1, Math.round(imageData.width * scale));
+      canvas.height = Math.max(1, Math.round(imageData.height * scale));
+      const ctx = canvas.getContext("2d");
+      const temp = document.createElement("canvas");
+      temp.width = imageData.width; temp.height = imageData.height;
+      temp.getContext("2d").putImageData(imageData, 0, 0);
+      ctx.drawImage(temp, 0, 0, canvas.width, canvas.height);
+      const label = document.createElement("span");
+      label.textContent = "프레임 " + (index + 1);
+      const remove = document.createElement("button");
+      remove.type = "button"; remove.className = "remove-video-frame";
+      remove.textContent = "×"; remove.setAttribute("aria-label", "프레임 " + (index + 1) + " 삭제");
+      remove.addEventListener("click", function (event) {
+        event.stopPropagation();
+        videoPreviewFrames.splice(index, 1);
+        if (videoPreviewIndex >= videoPreviewFrames.length) videoPreviewIndex = Math.max(0, videoPreviewFrames.length - 1);
+        if (!videoPreviewFrames.length) {
+          $("video-frame-preview").hidden = true;
+          strip.innerHTML = "";
+        } else showVideoPreviewFrame();
+        updateCount();
+      });
+      item.addEventListener("click", function () { videoPreviewIndex = index; showVideoPreviewFrame(); });
+      item.addEventListener("dragstart", function (event) {
+        event.dataTransfer.setData("text/plain", String(index));
+        event.dataTransfer.effectAllowed = "move";
+      });
+      item.addEventListener("dragover", function (event) { event.preventDefault(); item.classList.add("drag-target"); });
+      item.addEventListener("dragleave", function () { item.classList.remove("drag-target"); });
+      item.addEventListener("drop", function (event) {
+        event.preventDefault(); item.classList.remove("drag-target");
+        const from = Number(event.dataTransfer.getData("text/plain")), to = index;
+        if (!Number.isInteger(from) || from === to || from < 0 || from >= videoPreviewFrames.length) return;
+        const moved = videoPreviewFrames.splice(from, 1)[0];
+        videoPreviewFrames.splice(to, 0, moved);
+        videoPreviewIndex = to; showVideoPreviewFrame();
+      });
+      item.appendChild(canvas); item.appendChild(label); item.appendChild(remove);
+      strip.appendChild(item);
+    });
+    const active = strip.querySelector(".video-frame-thumb.active");
+    if (active) active.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
   }
   on("btn-frame-prev", "click", function () {
     if (videoPreviewIndex > 0) { videoPreviewIndex--; showVideoPreviewFrame(); }
