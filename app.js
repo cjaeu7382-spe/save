@@ -703,6 +703,7 @@
         status.textContent = "MP4 변환 엔진 준비 중… 처음 실행할 때 다운로드에 시간이 걸릴 수 있습니다.";
         ffmpegInstance = window.FFmpeg.createFFmpeg({
           log: false,
+          mainName: "main",
           corePath: "https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js"
         });
         await ffmpegInstance.load();
