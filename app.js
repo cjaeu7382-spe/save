@@ -164,8 +164,12 @@
     $("frame-text-color").value = overlay ? overlay.color : "#ffffff";
     $("frame-text-position").value = overlay ? overlay.position : "bottom";
     $("btn-text-apply").textContent = overlay ? "텍스트 수정 적용" : "선택 프레임에 적용";
-    $("btn-text-apply").disabled = !frame;
-    $("btn-text-clear").disabled = !overlay;
+    // 영상은 미리보기 프레임을 아직 추출하지 않았어도 구간이 준비되면
+    // 텍스트 적용 버튼을 사용할 수 있도록 한다.
+    $("btn-text-apply").disabled = isVideo
+      ? !(activeVideoDuration > 0 && validVideoRange())
+      : !frame;
+    $("btn-text-clear").disabled = !frame || !overlay;
   }
   function clearVideo() {
     if (activeVideoUrl) URL.revokeObjectURL(activeVideoUrl);
@@ -662,14 +666,38 @@
   on("btn-frame-next", "click", function () {
     if (videoPreviewIndex < videoPreviewFrames.length - 1) { videoPreviewIndex++; showVideoPreviewFrame(); }
   });
-  on("btn-text-apply", "click", function () {
+  on("btn-text-apply", "click", async function () {
+    const button = $("btn-text-apply");
     const isVideo = !!activeVideoUrl;
-    const index = isVideo ? videoPreviewIndex : selectedFrameIndex;
-    const frame = isVideo ? videoPreviewFrames[index] : frames[index];
-    if (!frame) return;
     const value = $("frame-text").value.trim();
     if (!value) { alert("추가할 문구를 입력해 주세요."); return; }
     const overlay = { text: value, fontSize: Number($("frame-text-size").value) || 36, color: $("frame-text-color").value, position: $("frame-text-position").value };
+    if (isVideo && !videoPreviewFrames.length) {
+      if (!(activeVideoDuration > 0 && validVideoRange())) {
+        alert("영상의 시작 시간과 종료 시간을 먼저 확인해 주세요.");
+        return;
+      }
+      button.disabled = true;
+      button.textContent = "영상 프레임 준비 중...";
+      try {
+        const extracted = await extractVideoFrames();
+        videoPreviewFrames = extracted.imageDatas;
+        videoPreviewDelay = extracted.delay;
+        videoPreviewReady = true;
+        videoPreviewIndex = 0;
+        $("video-frame-preview").hidden = false;
+        showVideoPreviewFrame();
+      } catch (error) {
+        alert("영상 프레임을 준비하지 못했습니다: " + error.message);
+        updateTextEditor();
+        return;
+      } finally {
+        button.textContent = "선택 프레임에 적용";
+      }
+    }
+    const index = isVideo ? videoPreviewIndex : selectedFrameIndex;
+    const frame = isVideo ? videoPreviewFrames[index] : frames[index];
+    if (!frame) { updateTextEditor(); return; }
     if (isVideo) { bakeTextOnFrame(frame, true, overlay, index); showVideoPreviewFrame(); }
     else { bakeTextOnFrame(frame, false, overlay, index); renderStrip(); }
     updateTextEditor();
