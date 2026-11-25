@@ -689,7 +689,8 @@
           imageDatas.push(ctx.getImageData(0, 0, size.width, size.height));
         }
       }
-      if (currentMode === "edit" && editSpeedFactor !== 1) exportDelay = Math.max(20, Math.round(exportDelay / editSpeedFactor));\n      const blob = await window.GifLab.encodeGif(imageDatas, {
+      if (currentMode === "edit" && editSpeedFactor !== 1) exportDelay = Math.max(20, Math.round(exportDelay / editSpeedFactor));
+      const blob = await window.GifLab.encodeGif(imageDatas, {
         width: size.width, height: size.height, delay: exportDelay,
         loop: Number($("opt-loop").value), dither: $("opt-dither").checked
       }, function (ratio) {
@@ -1156,7 +1157,13 @@
     resultGif.hidden=true;
     updateEditToolsStatus("변환 완료 · " + frames.length + "개 프레임 · " + Math.round(blob.size/1024) + " KB");
   }
-  on("btn-crop-apply","click",cropAllFrames);\n  on("btn-downsize","click",applyDownsizing);\n  on("btn-rotate-90","click",()=>transformSelectedFrames(90,false,false));\n  on("btn-rotate-180","click",()=>transformSelectedFrames(180,false,false));\n  on("btn-rotate-270","click",()=>transformSelectedFrames(270,false,false));\n  on("btn-flip-horizontal","click",()=>transformSelectedFrames(0,true,false));\n  on("btn-flip-vertical","click",()=>transformSelectedFrames(0,false,true));
+  on("btn-crop-apply","click",cropAllFrames);
+  on("btn-downsize","click",applyDownsizing);
+  on("btn-rotate-90","click",()=>transformSelectedFrames(90,false,false));
+  on("btn-rotate-180","click",()=>transformSelectedFrames(180,false,false));
+  on("btn-rotate-270","click",()=>transformSelectedFrames(270,false,false));
+  on("btn-flip-horizontal","click",()=>transformSelectedFrames(0,true,false));
+  on("btn-flip-vertical","click",()=>transformSelectedFrames(0,false,true));
   on("btn-cut-apply","click",cutFrames);
   on("btn-edit-reverse","click",reverseEditFrames);
   on("btn-optimize","click",optimizeEditFrames);
