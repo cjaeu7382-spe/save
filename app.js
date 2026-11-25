@@ -24,6 +24,7 @@
   const frames = [];
   let dragFrom = null, previewTimer = 0, objectUrl = "", activeVideoUrl = "";
   let activeVideoDuration = 0, videoPreviewFrames = [], videoPreviewIndex = 0, videoPreviewDelay = 120, videoPreviewReady = false;
+  let pendingAddVideoFile = null, pendingAddVideoDuration = 0, ffmpegInstance = null;
 
   function uid() { return Math.random().toString(36).slice(2); }
   function formatTime(seconds) {
@@ -218,7 +219,7 @@
     }
     await waitForVideoFrame();
   }
-  async function extractFramesFromFile(file, width, height) {
+  async function extractFramesFromFile(file, width, height, selectedStart, selectedEnd) {
     const url = URL.createObjectURL(file), video = document.createElement("video");
     video.muted = true; video.playsInline = true; video.preload = "auto"; video.src = url;
     try {
@@ -234,12 +235,16 @@
       }
       const duration = video.duration;
       if (!Number.isFinite(duration) || duration <= 0) throw new Error("영상 길이를 확인할 수 없습니다.");
+      const start = Number.isFinite(selectedStart) ? selectedStart : 0;
+      const end = Number.isFinite(selectedEnd) ? selectedEnd : duration;
+      if (start < 0 || end > duration || end <= start) throw new Error("추가 영상의 시작·종료 시간을 확인해 주세요.");
+      const clipDuration = end - start;
       const delay = Math.max(20, Number($("opt-delay").value) || 120);
-      const count = Math.max(1, Math.min(60, Math.ceil(duration * 1000 / delay)));
+      const count = Math.max(2, Math.min(180, Math.ceil(clipDuration * 1000 / delay)));
       const canvas = document.createElement("canvas"); canvas.width = width; canvas.height = height;
       const ctx = canvas.getContext("2d", { willReadFrequently: true }), output = [];
       for (let i = 0; i < count; i++) {
-        const time = Math.min(duration - 0.01, duration * i / count);
+        const time = Math.min(end - 0.001, start + clipDuration * i / count);
         if (Math.abs(video.currentTime - time) >= 0.015) {
           await new Promise(function (resolve, reject) {
             let timer;
@@ -303,46 +308,96 @@
     input.value = "";
     if (!files.length) return;
     try {
-      if (!activeVideoUrl) {
-        for (const file of files) {
-          if (file.type.startsWith("image/") || /\\.(png|jpe?g|gif|webp|bmp)$/i.test(file.name)) {
-            frames.push(await loadImageFile(file));
-          } else if (file.type.startsWith("video/") || /\\.(mp4|webm|mov|m4v)$/i.test(file.name)) {
-            const base = frames.length ? outputSize(frames[0].source) : { width: Math.max(16, Number($("opt-width").value) || 480), height: 320 };
-            const addedFrames = await extractFramesFromFile(file, base.width, base.height);
-            addedFrames.forEach(function (imageData) {
-              const canvas = document.createElement("canvas"); canvas.width = imageData.width; canvas.height = imageData.height;
-              canvas.getContext("2d").putImageData(imageData, 0, 0);
-              frames.push({ id: uid(), source: canvas, thumb: canvas.toDataURL("image/png"), kind: "video-frame" });
-            });
-          }
-        }
-        renderStrip(); restartPreview();
-        if (frames.length && $("btn-sample")) $("btn-sample").hidden = true;
-        return;
-      }
-      if (!videoPreviewReady) {
-        const extracted = await extractVideoFrames();
-        videoPreviewFrames = extracted.imageDatas; videoPreviewDelay = extracted.delay;
-        videoPreviewReady = true; videoPreviewIndex = 0;
-      }
       for (const file of files) {
         if (file.type.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp)$/i.test(file.name)) {
-          const loaded = await loadImageFile(file);
-          const width = videoPreviewFrames[0].width, height = videoPreviewFrames[0].height;
-          const canvas = document.createElement("canvas"); canvas.width = width; canvas.height = height;
-          const ctx = canvas.getContext("2d", { willReadFrequently: true });
-          drawFitted(ctx, loaded.source, width, height, $("opt-fit").value, $("opt-bg").value);
-          videoPreviewFrames.push(ctx.getImageData(0, 0, width, height));
-          if (loaded.revokeThumb) URL.revokeObjectURL(loaded.thumb);
+          if (activeVideoUrl) {
+            if (!videoPreviewReady) {
+              const extracted = await extractVideoFrames();
+              videoPreviewFrames = extracted.imageDatas; videoPreviewDelay = extracted.delay; videoPreviewReady = true;
+            }
+            const loaded = await loadImageFile(file);
+            const width = videoPreviewFrames[0].width, height = videoPreviewFrames[0].height;
+            const canvas = document.createElement("canvas"); canvas.width = width; canvas.height = height;
+            const ctx = canvas.getContext("2d", { willReadFrequently: true });
+            drawFitted(ctx, loaded.source, width, height, $("opt-fit").value, $("opt-bg").value);
+            videoPreviewFrames.push(ctx.getImageData(0, 0, width, height));
+            if (loaded.revokeThumb) URL.revokeObjectURL(loaded.thumb);
+          } else frames.push(await loadImageFile(file));
         } else if (file.type.startsWith("video/") || /\.(mp4|webm|mov|m4v)$/i.test(file.name)) {
-          const added = await extractFramesFromFile(file, videoPreviewFrames[0].width, videoPreviewFrames[0].height);
-          videoPreviewFrames.push.apply(videoPreviewFrames, added);
+          pendingAddVideoFile = file;
+          const video = $("add-video-source"), url = URL.createObjectURL(file);
+          if (video.dataset.objectUrl) URL.revokeObjectURL(video.dataset.objectUrl);
+          video.dataset.objectUrl = url; video.src = url; video.load();
+          $("add-video-range").hidden = false;
+          await new Promise(function (resolve, reject) {
+            video.onloadedmetadata = function () {
+              pendingAddVideoDuration = video.duration;
+              $("add-video-duration").textContent = "전체 " + formatTime(video.duration);
+              $("add-range-start").value = "00:00:00";
+              $("add-range-end").value = formatTime(video.duration);
+              $("add-range-summary").textContent = "선택 구간 00:00:00–" + formatTime(video.duration);
+              resolve();
+            };
+            video.onerror = function () { reject(new Error("추가할 영상 파일을 읽을 수 없습니다.")); };
+          });
+          return;
         }
       }
-      $("video-frame-preview").hidden = false;
-      videoPreviewIndex = videoPreviewFrames.length - 1; showVideoPreviewFrame(); updateCount();
+      if (activeVideoUrl) {
+        $("video-frame-preview").hidden = false;
+        videoPreviewIndex = videoPreviewFrames.length - 1; showVideoPreviewFrame(); updateCount();
+      } else {
+        renderStrip(); restartPreview();
+        if (frames.length && $("btn-sample")) $("btn-sample").hidden = true;
+      }
     } catch (error) { alert("프레임을 추가하지 못했습니다: " + error.message); }
+  });
+  on("btn-add-video-cancel", "click", function () {
+    const video = $("add-video-source");
+    if (video.dataset.objectUrl) URL.revokeObjectURL(video.dataset.objectUrl);
+    video.pause(); video.removeAttribute("src"); video.load();
+    $("add-video-range").hidden = true; pendingAddVideoFile = null;
+  });
+  on("btn-add-video-confirm", "click", async function () {
+    if (!pendingAddVideoFile) return;
+    const start = parseTime($("add-range-start").value), end = parseTime($("add-range-end").value);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end > pendingAddVideoDuration || end <= start) {
+      alert("추가 영상의 시작·종료 시간을 올바르게 입력해 주세요."); return;
+    }
+    const button = $("btn-add-video-confirm");
+    button.disabled = true; button.textContent = "프레임 추출 중…";
+    try {
+      let width, height;
+      if (activeVideoUrl) {
+        if (!videoPreviewReady) {
+          const baseFrames = await extractVideoFrames();
+          videoPreviewFrames = baseFrames.imageDatas; videoPreviewDelay = baseFrames.delay; videoPreviewReady = true;
+        }
+        width = videoPreviewFrames[0].width; height = videoPreviewFrames[0].height;
+      } else {
+        const base = frames.length ? outputSize(frames[0].source) : { width: Math.max(16, Number($("opt-width").value) || 480), height: 320 };
+        width = base.width; height = base.height;
+      }
+      const added = await extractFramesFromFile(pendingAddVideoFile, width, height, start, end);
+      if (activeVideoUrl) {
+        videoPreviewFrames.push.apply(videoPreviewFrames, added);
+        videoPreviewIndex = videoPreviewFrames.length - 1;
+        $("video-frame-preview").hidden = false; showVideoPreviewFrame(); updateCount();
+      } else {
+        added.forEach(function (imageData) {
+          const canvas = document.createElement("canvas"); canvas.width = imageData.width; canvas.height = imageData.height;
+          canvas.getContext("2d").putImageData(imageData, 0, 0);
+          frames.push({ id: uid(), source: canvas, thumb: canvas.toDataURL("image/png"), kind: "video-frame" });
+        });
+        renderStrip(); restartPreview();
+        if ($("btn-sample")) $("btn-sample").hidden = true;
+      }
+      const video = $("add-video-source");
+      if (video.dataset.objectUrl) URL.revokeObjectURL(video.dataset.objectUrl);
+      video.pause(); video.removeAttribute("src"); video.load();
+      $("add-video-range").hidden = true; pendingAddVideoFile = null;
+    } catch (error) { alert("영상 구간을 추가하지 못했습니다: " + error.message); }
+    finally { button.disabled = false; button.textContent = "선택 구간 프레임 추가"; }
   });
   if (dropzone) {
     ["dragenter", "dragover"].forEach(function (type) {
@@ -535,6 +590,68 @@
       updateCount();
     }
   });
+
+  on("convert-gif-input", "change", function () {
+    const file = this.files && this.files[0];
+    $("btn-gif-jpg").disabled = !file; $("btn-gif-mp4").disabled = !file;
+    $("converter-status").textContent = file ? file.name + " 선택됨" : "GIF 파일을 선택해 주세요.";
+  });
+  async function convertGifToJpg() {
+    const file = $("convert-gif-input").files[0]; if (!file) return;
+    const status = $("converter-status"); $("btn-gif-jpg").disabled = true;
+    try {
+      if (!window.gifuct || !window.JSZip) throw new Error("JPG 변환 라이브러리를 불러오지 못했습니다. 새로고침해 주세요.");
+      const parsed = window.gifuct.parseGIF(await file.arrayBuffer());
+      const decoded = window.gifuct.decompressFrames(parsed, true);
+      const width = parsed.lsd.width, height = parsed.lsd.height;
+      const canvas = document.createElement("canvas"); canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext("2d"), composite = document.createElement("canvas");
+      composite.width = width; composite.height = height;
+      const cctx = composite.getContext("2d"), zip = new JSZip();
+      for (let i = 0; i < decoded.length; i++) {
+        const frame = decoded[i], patch = new ImageData(new Uint8ClampedArray(frame.patch), frame.dims.width, frame.dims.height);
+        const temp = document.createElement("canvas"); temp.width = frame.dims.width; temp.height = frame.dims.height;
+        temp.getContext("2d").putImageData(patch, 0, 0);
+        cctx.drawImage(temp, frame.dims.left, frame.dims.top);
+        ctx.clearRect(0, 0, width, height); ctx.drawImage(composite, 0, 0);
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", 0.92));
+        zip.file("frame-" + String(i + 1).padStart(4, "0") + ".jpg", blob);
+        status.textContent = "JPG 프레임 변환 " + (i + 1) + " / " + decoded.length;
+        if (frame.disposalType === 2) cctx.clearRect(frame.dims.left, frame.dims.top, frame.dims.width, frame.dims.height);
+      }
+      const blob = await zip.generateAsync({ type: "blob" }), url = URL.createObjectURL(blob), link = document.createElement("a");
+      link.href = url; link.download = file.name.replace(/\.gif$/i, "") + "-jpg-frames.zip"; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+      status.textContent = "완료 · " + decoded.length + "장의 JPG를 ZIP으로 저장했습니다.";
+    } catch (error) { status.textContent = "JPG 변환 실패: " + error.message; }
+    finally { $("btn-gif-jpg").disabled = false; }
+  }
+  async function convertGifToMp4() {
+    const file = $("convert-gif-input").files[0]; if (!file) return;
+    const status = $("converter-status"), button = $("btn-gif-mp4"); button.disabled = true;
+    try {
+      if (!window.FFmpeg) throw new Error("MP4 변환 엔진을 불러오지 못했습니다. 새로고침해 주세요.");
+      if (!ffmpegInstance) {
+        status.textContent = "MP4 변환 엔진 준비 중…";
+        ffmpegInstance = window.FFmpeg.createFFmpeg({ log: false, corePath: "https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js" });
+        await ffmpegInstance.load();
+      }
+      status.textContent = "GIF를 MP4로 변환 중…";
+      const inputName = "input.gif", outputName = "output.mp4";
+      ffmpegInstance.FS("writeFile", inputName, new Uint8Array(await file.arrayBuffer()));
+      await ffmpegInstance.run("-i", inputName, "-movflags", "faststart", "-pix_fmt", "yuv420p", "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2", outputName);
+      const data = ffmpegInstance.FS("readFile", outputName), blob = new Blob([data.buffer], { type: "video/mp4" });
+      const url = URL.createObjectURL(blob), link = document.createElement("a");
+      link.href = url; link.download = file.name.replace(/\.gif$/i, "") + ".mp4"; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+      try { ffmpegInstance.FS("unlink", inputName); ffmpegInstance.FS("unlink", outputName); } catch (_) {}
+      status.textContent = "MP4 변환 완료 · " + Math.round(blob.size / 1024) + " KB";
+    } catch (error) { status.textContent = "MP4 변환 실패: " + (error.message || error); }
+    finally { button.disabled = false; }
+  }
+  on("btn-gif-jpg", "click", convertGifToJpg);
+  on("btn-gif-mp4", "click", convertGifToMp4);
+
   on("btn-make", "click", function () { generateGif(true); });
   updateCount();
 })();
