@@ -109,6 +109,7 @@
       filmstrip.appendChild(card);
     });
     updateCount();
+    updateTextEditor();
   }
   function drawTextOverlay(ctx, overlay, width, height) {
     if (!overlay || !overlay.text) return;
