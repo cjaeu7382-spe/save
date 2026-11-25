@@ -161,23 +161,49 @@
     };
     paint(); previewTimer = setInterval(paint, delay);
   }
-  function seekVideo(time) {
-    return new Promise(function (resolve, reject) {
-      if (Math.abs(sourceVideo.currentTime - time) < 0.015) { resolve(); return; }
-      const done = function () { cleanup(); resolve(); };
-      const fail = function () { cleanup(); reject(new Error("영상 프레임을 읽지 못했습니다.")); };
-      const cleanup = function () { sourceVideo.removeEventListener("seeked", done); sourceVideo.removeEventListener("error", fail); };
-      sourceVideo.addEventListener("seeked", done, { once: true });
-      sourceVideo.addEventListener("error", fail, { once: true });
-      sourceVideo.currentTime = time;
+  async function waitForVideoFrame() {
+    if (typeof sourceVideo.requestVideoFrameCallback === "function") {
+      await new Promise(function (resolve) {
+        sourceVideo.requestVideoFrameCallback(function () { resolve(); });
+      });
+      return;
+    }
+    await new Promise(function (resolve) {
+      requestAnimationFrame(function () { requestAnimationFrame(resolve); });
     });
+  }
+  async function seekVideo(time) {
+    if (Math.abs(sourceVideo.currentTime - time) >= 0.015) {
+      await new Promise(function (resolve, reject) {
+        let timer = 0;
+        const cleanup = function () {
+          clearTimeout(timer);
+          sourceVideo.removeEventListener("seeked", done);
+          sourceVideo.removeEventListener("error", fail);
+        };
+        const done = function () { cleanup(); resolve(); };
+        const fail = function () { cleanup(); reject(new Error("영상 프레임을 읽지 못했습니다.")); };
+        sourceVideo.addEventListener("seeked", done, { once: true });
+        sourceVideo.addEventListener("error", fail, { once: true });
+        timer = setTimeout(function () {
+          cleanup();
+          reject(new Error("영상 탐색 시간이 초과되었습니다. 영상 형식을 확인해 주세요."));
+        }, 10000);
+        sourceVideo.currentTime = time;
+      });
+    }
+    await waitForVideoFrame();
   }
   async function extractVideoFrames() {
     const start = Number($("range-start").value), end = Number($("range-end").value);
     if (!validVideoRange()) throw new Error("시작 시간과 종료 시간을 올바르게 설정하세요.");
     sourceVideo.pause();
-    const delay = Math.max(20, Number($("opt-delay").value) || 120);
-    const count = Math.max(2, Math.min(180, Math.ceil((end - start) * 1000 / delay)));
+    const targetDelay = Math.max(20, Number($("opt-delay").value) || 120);
+    const durationMs = (end - start) * 1000;
+    const count = Math.max(2, Math.min(180, Math.ceil(durationMs / targetDelay)));
+    // Keep the exported GIF duration aligned with the selected video interval,
+    // including when the 180-frame safety limit is reached.
+    const frameDelay = Math.max(20, Math.round(durationMs / count));
     const size = outputSize(sourceVideo), canvas = document.createElement("canvas");
     canvas.width = size.width; canvas.height = size.height;
     const ctx = canvas.getContext("2d", { willReadFrequently: true }), data = [];
@@ -189,7 +215,7 @@
       progressBar.style.width = Math.round((i + 1) / count * 35) + "%";
       progressText.textContent = "영상 프레임 추출 " + (i + 1) + " / " + count;
     }
-    return { imageDatas: data, size: size };
+    return { imageDatas: data, size: size, delay: frameDelay };
   }
   ["opt-width", "opt-delay", "opt-fit", "opt-bg"].forEach(function (id) {
     $(id).addEventListener("input", restartPreview); $(id).addEventListener("change", restartPreview);
@@ -233,9 +259,10 @@
     btnMake.disabled = true; progress.hidden = false; download.hidden = true; resultGif.hidden = true;
     progressBar.style.width = "0%"; progressText.textContent = "캔버스 준비 중";
     try {
-      let imageDatas, size;
+      let imageDatas, size, exportDelay = Number($("opt-delay").value) || 120;
       if (activeVideoUrl) {
-        const extracted = await extractVideoFrames(); imageDatas = extracted.imageDatas; size = extracted.size;
+        const extracted = await extractVideoFrames();
+        imageDatas = extracted.imageDatas; size = extracted.size; exportDelay = extracted.delay;
       } else {
         size = outputSize(frames[0].source);
         const fit = $("opt-fit").value, bg = $("opt-bg").value;
@@ -247,7 +274,7 @@
         }
       }
       const blob = await window.GifLab.encodeGif(imageDatas, {
-        width: size.width, height: size.height, delay: Number($("opt-delay").value) || 120,
+        width: size.width, height: size.height, delay: exportDelay,
         loop: Number($("opt-loop").value), dither: $("opt-dither").checked
       }, function (ratio) {
         const offset = activeVideoUrl ? 0.35 : 0;
