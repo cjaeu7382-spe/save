@@ -86,9 +86,6 @@
       card.className = "frame-card" + (index === selectedFrameIndex ? " active" : ""); card.draggable = true; card.dataset.id = frame.id;
       card.setAttribute("role", "listitem");
       const img = document.createElement("img"); img.src = frame.thumb; img.alt = "프레임 " + (index + 1); card.appendChild(img);
-      if (frame.textOverlay && frame.textOverlay.text) {
-        const overlay = document.createElement("span"); overlay.className = "frame-thumb-text"; overlay.textContent = frame.textOverlay.text; card.appendChild(overlay);
-      }
       const meta = document.createElement("div"); meta.className = "meta";
       meta.innerHTML = "<span>#" + (index + 1) + "</span><span>" + (index === selectedFrameIndex ? "선택됨" : "선택 · 드래그") + "</span>"; card.appendChild(meta);
       card.addEventListener("click", function (event) { if (event.target === remove) return; selectedFrameIndex = index; updateTextEditor(); renderStrip(); });
@@ -685,7 +682,6 @@
     if (isVideo) {
       if (frame.textBaseData) videoPreviewFrames[index] = frame.textBaseData;
     } else if (frame.textBaseSource) {
-      frame.source = frame.textBaseSource; frame.thumb = frame.textBaseSource === frame.source ? frame.thumb : frame.thumb;
       const source = frame.textBaseSource;
       const canvas = document.createElement("canvas"); canvas.width = source.videoWidth || source.naturalWidth || source.width; canvas.height = source.videoHeight || source.naturalHeight || source.height;
       canvas.getContext("2d").drawImage(source, 0, 0, canvas.width, canvas.height);
