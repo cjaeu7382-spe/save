@@ -697,6 +697,7 @@
         progressBar.style.width = Math.round((offset + ratio * (1 - offset)) * 100) + "%";
         progressText.textContent = (makeDownload ? "GIF 인코딩 " : "미리보기 인코딩 ") + Math.round(ratio * 100) + "%";
       });
+      if (makeDownload && currentMode === "edit" && await downloadEditedOutput(blob,imageDatas)) { resultGif.hidden=true; download.hidden=true; progressText.textContent="변환 및 다운로드 완료"; return; }
       if (objectUrl) URL.revokeObjectURL(objectUrl);
       objectUrl = URL.createObjectURL(blob);
       resultGif.src = objectUrl; resultGif.hidden = false;
