@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=20261125-5" />
+    <link rel="stylesheet" href="./styles.css?v=20261125-6" />
   </head>
   <body>
     <div class="grain" aria-hidden="true"></div>
@@ -83,8 +83,7 @@
           </label>
           <p class="hint" id="edit-gif-status" aria-live="polite">GIF 파일을 선택하면 프레임별 편집을 시작할 수 있습니다.</p>
         </section>
-        <div id="frame-workspace">
-<div class="filmstrip" id="filmstrip" role="list" aria-label="프레임 목록"></div>
+        <div class="editor-tools" id="editor-tools" hidden>
         <section class="text-editor" aria-label="프레임 텍스트 편집">
           <div class="section-heading"><div><p class="eyebrow">FRAME TEXT</p><h2>선택한 프레임에 텍스트 추가</h2></div><span id="text-frame-label">프레임을 먼저 추가해 주세요.</span></div>
           <label>표시할 문구 <textarea id="frame-text" rows="2" maxlength="120" placeholder="이 프레임에 표시할 문구를 입력하세요."></textarea></label>
@@ -115,6 +114,9 @@
           <label>배경색 <input id="opt-bg" type="color" value="#111111" /></label>
           <label class="check"><input id="opt-dither" type="checkbox" /> 디더링 (색 부드럽게)</label>
         </form>
+        </div>
+        <div id="frame-workspace">
+<div class="filmstrip" id="filmstrip" role="list" aria-label="프레임 목록"></div>
         <div class="export">
           <button type="button" id="btn-preview-gif" class="ghost" disabled hidden>생성할 GIF 미리보기</button>
           <button type="button" id="btn-make" class="primary" disabled>GIF 만들기</button>
@@ -136,6 +138,6 @@
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
     <script src="./encoder.js"></script>
-    <script src="./app.js?v=20261125-12"></script>
+    <script src="./app.js?v=20261125-13"></script>
   </body>
 </html>
