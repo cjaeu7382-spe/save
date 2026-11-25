@@ -120,7 +120,7 @@
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
     ctx.lineJoin = "round"; ctx.lineWidth = Math.max(2, fontSize * 0.12);
     ctx.strokeStyle = "rgba(0,0,0,.82)"; ctx.fillStyle = overlay.color || "#ffffff";
-    String(overlay.text).split(/\\r?\\n/).slice(0, 4).forEach(function (line, index, lines) {
+    String(overlay.text).split(/\r?\n/).slice(0, 4).forEach(function (line, index, lines) {
       const lineY = y + (index - (lines.length - 1) / 2) * fontSize * 1.2;
       ctx.strokeText(line, width / 2, lineY, width * 0.92);
       ctx.fillText(line, width / 2, lineY, width * 0.92);
