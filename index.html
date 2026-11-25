@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=20261125-7" />
+    <link rel="stylesheet" href="./styles.css?v=20261125-8" />
   </head>
   <body>
     <div class="grain" aria-hidden="true"></div>
@@ -116,27 +116,47 @@
         </form>
         <section class="text-editor advanced-gif-tools" aria-label="GIF 추가 편집 도구">
           <div class="section-heading"><div><p class="eyebrow">GIF TOOLS</p><h2>GIF 편집 도구</h2></div><span>업로드한 GIF에 적용</span></div>
+          <h3>Resize / Downsizing</h3>
           <div class="tool-grid">
-            <label>Resize 너비(px)<input id="edit-resize-width" type="number" min="16" max="1280" value="480"></label>
-            <label>Resize 높이(px)<input id="edit-resize-height" type="number" min="16" max="1280" value="0"><small>0이면 원본 비율 유지</small></label>
-            <label>Downsizing 비율<select id="edit-downsize"><option value="1">100% (원본 크기)</option><option value="0.75">75%</option><option value="0.5">50%</option><option value="0.25">25%</option></select></label>
-            <label>Format Convert<select id="edit-format"><option value="gif">GIF 애니메이션</option><option value="png">PNG 프레임 ZIP</option><option value="webp">WebP 프레임 ZIP</option></select></label>
-            <label>Crop 왼쪽(%)<input id="crop-x" type="number" min="0" max="99" value="0"></label>
-            <label>Crop 위쪽(%)<input id="crop-y" type="number" min="0" max="99" value="0"></label>
-            <label>Crop 너비(%)<input id="crop-w" type="number" min="1" max="100" value="100"></label>
-            <label>Crop 높이(%)<input id="crop-h" type="number" min="1" max="100" value="100"></label>
-            <label>Speed<select id="edit-speed"><option value="0.25">0.25배</option><option value="0.5">0.5배</option><option value="0.75">0.75배</option><option value="1" selected>1배 (원본)</option><option value="1.25">1.25배</option><option value="1.5">1.5배</option><option value="2">2배</option><option value="3">3배</option></select></label>
+            <label>가로(px)<input id="edit-resize-width" type="number" min="16" max="1280" value="480"></label>
+            <label>세로(px)<input id="edit-resize-height" type="number" min="0" max="1280" value="0"><small>0이면 비율 유지</small></label>
+            <label class="tool-check"><input id="downsize-size" type="checkbox"> 이미지 크기 축소</label>
+            <label>축소 비율<select id="edit-downsize"><option value="0.9">90%</option><option value="0.75">75%</option><option value="0.5" selected>50%</option><option value="0.25">25%</option></select></label>
+            <label class="tool-check"><input id="downsize-frames" type="checkbox"> 프레임 수 줄이기</label>
+            <label>프레임 간격<select id="downsize-frame-step"><option value="2">2개 중 1개 유지</option><option value="3">3개 중 1개 유지</option><option value="4">4개 중 1개 유지</option></select></label>
+            <label class="tool-check"><input id="downsize-resolution" type="checkbox"> 해상도 낮추기</label>
+            <label>해상도 배율<select id="downsize-resolution-scale"><option value="0.9">90%</option><option value="0.75">75%</option><option value="0.5" selected>50%</option><option value="0.25">25%</option></select></label>
+          </div>
+          <div class="tool-actions"><button type="button" class="ghost" id="btn-downsize">Downsizing 적용</button></div>
+          <h3>Crop</h3>
+          <div class="tool-grid">
+            <label>Crop 비율<select id="crop-ratio"><option value="original">원본 비율</option><option value="1:1">1:1 정사각형</option><option value="4:3">4:3</option><option value="16:9">16:9</option><option value="9:16">9:16 세로</option><option value="3:2">3:2</option><option value="2:3">2:3</option></select></label>
+            <label>빈 공간 처리<select id="crop-fill-mode"><option value="solid">단색으로 채우기</option><option value="zoom">이미지를 확대해 채우기</option></select></label>
+            <label>배경색<input id="crop-fill-color" type="color" value="#000000"></label>
+          </div>
+          <div class="tool-actions"><button type="button" class="primary" id="btn-crop-apply">Crop 적용</button></div>
+          <h3>Rotate / Flip</h3>
+          <div class="tool-grid">
+            <button type="button" class="ghost" id="btn-rotate-90">90° 회전</button>
+            <button type="button" class="ghost" id="btn-rotate-180">180° 회전</button>
+            <button type="button" class="ghost" id="btn-rotate-270">270° 회전</button>
+            <button type="button" class="ghost" id="btn-flip-horizontal">좌우 뒤집기</button>
+            <button type="button" class="ghost" id="btn-flip-vertical">상하 뒤집기</button>
+          </div>
+          <h3>Format Convert / Speed / Cut</h3>
+          <div class="tool-grid">
+            <label>저장 형식<select id="edit-format"><option value="gif">GIF</option><option value="mp4">MP4 동영상</option><option value="jpg">JPG 이미지 묶음(ZIP)</option></select></label>
+            <label>재생 속도<select id="edit-speed"><option value="0.25">0.25배</option><option value="0.5">0.5배</option><option value="0.75">0.75배</option><option value="1" selected>1배</option><option value="1.25">1.25배</option><option value="1.5">1.5배</option><option value="2">2배</option><option value="3">3배</option></select></label>
             <label>Cut 시작 프레임<input id="cut-start" type="number" min="1" value="1"></label>
             <label>Cut 종료 프레임<input id="cut-end" type="number" min="1" value="99999"></label>
           </div>
-          <div class="text-editor-actions tool-actions">
-            <button type="button" class="ghost" id="btn-crop-apply">Crop 적용</button>
+          <div class="tool-actions">
+            <button type="button" class="ghost" id="btn-edit-speed">Speed 적용</button>
             <button type="button" class="ghost" id="btn-cut-apply">Cut 적용</button>
             <button type="button" class="ghost" id="btn-edit-reverse">Reverse</button>
             <button type="button" class="ghost" id="btn-optimize">Optimize</button>
-            <button type="button" class="ghost" id="btn-edit-speed">Speed 적용</button>
           </div>
-          <p class="hint" id="edit-tools-status" aria-live="polite">크기·자르기·속도·순서·최적화 설정을 적용한 뒤 GIF 저장을 누르세요.</p>
+          <p class="hint" id="edit-tools-status" aria-live="polite">편집한 뒤 저장 형식을 선택하고 저장 버튼을 누르세요.</p>
         </section>
 
         </div>
@@ -163,6 +183,6 @@
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
     <script src="./encoder.js"></script>
-    <script src="./app.js?v=20261125-14"></script>
+    <script src="./app.js?v=20261125-15"></script>
   </body>
 </html>
