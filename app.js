@@ -222,11 +222,26 @@
     ctx.drawImage(source,-sw/2,-sh/2); return canvas;
   }
   function transformSelectedFrames(rotation,flipX,flipY) {
-    const scope=$("rotate-scope").value;
-    const indexes=scope==="all"?frames.map((_,i)=>i):[selectedFrameIndex];
-    indexes.forEach(i=>{const f=frames[i];if(!f)return;const canvas=transformFrameCanvas(f.source,rotation||0,!!flipX,!!flipY);f.source=canvas;f.thumb=canvas.toDataURL("image/png");f.textBaseSource=null;f.textOverlay=null;});
-    renderStrip(); restartPreview(); updateTextEditor();
-    updateEditToolsStatus("변환 적용 완료 · "+(scope==="all"?"전체 프레임":"선택 프레임"));
+    if (!frames.length) {
+      updateEditToolsStatus("먼저 편집할 GIF 프레임을 불러와 주세요.");
+      return;
+    }
+    const scopeControl = $("edit-transform-scope");
+    const scope = scopeControl ? scopeControl.value : "all";
+    const indexes = scope === "current" ? [selectedFrameIndex] : frames.map((_, i) => i);
+    indexes.forEach(function (i) {
+      const frame = frames[i];
+      if (!frame || !frame.source) return;
+      const canvas = transformFrameCanvas(frame.source, rotation || 0, !!flipX, !!flipY);
+      frame.source = canvas;
+      frame.thumb = canvas.toDataURL("image/png");
+      frame.textBaseSource = null;
+      frame.textOverlay = null;
+    });
+    renderStrip();
+    restartPreview();
+    updateTextEditor();
+    updateEditToolsStatus("변환 적용 완료 · " + (scope === "current" ? "선택 프레임" : "전체 프레임"));
   }
   function rotateSelectedFrames(direction) { transformSelectedFrames(direction*90,false,false); }
   function updateTextEditor() {
