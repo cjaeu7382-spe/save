@@ -22,7 +22,7 @@
     videoRange.insertBefore(sourceVideo, rangeFields || null);
   }
   const frames = [];
-  let dragFrom = null, previewTimer = 0, objectUrl = "", activeVideoUrl = "";
+  let dragFrom = null, previewTimer = 0, objectUrl = "", activeVideoUrl = "", selectedFrameIndex = 0;
   let activeVideoDuration = 0, videoPreviewFrames = [], videoPreviewIndex = 0, videoPreviewDelay = 120, videoPreviewReady = false;
   let pendingAddVideoFile = null, pendingAddVideoDuration = 0, ffmpegInstance = null, gifuctModulePromise = null;
 
@@ -83,15 +83,19 @@
     filmstrip.innerHTML = "";
     frames.forEach(function (frame, index) {
       const card = document.createElement("article");
-      card.className = "frame-card"; card.draggable = true; card.dataset.id = frame.id;
+      card.className = "frame-card" + (index === selectedFrameIndex ? " active" : ""); card.draggable = true; card.dataset.id = frame.id;
       card.setAttribute("role", "listitem");
       const img = document.createElement("img"); img.src = frame.thumb; img.alt = "프레임 " + (index + 1); card.appendChild(img);
+      if (frame.textOverlay && frame.textOverlay.text) {
+        const overlay = document.createElement("span"); overlay.className = "frame-thumb-text"; overlay.textContent = frame.textOverlay.text; card.appendChild(overlay);
+      }
       const meta = document.createElement("div"); meta.className = "meta";
-      meta.innerHTML = "<span>#" + (index + 1) + "</span><span>드래그로 이동</span>"; card.appendChild(meta);
+      meta.innerHTML = "<span>#" + (index + 1) + "</span><span>" + (index === selectedFrameIndex ? "선택됨" : "선택 · 드래그") + "</span>"; card.appendChild(meta);
+      card.addEventListener("click", function (event) { if (event.target === remove) return; selectedFrameIndex = index; updateTextEditor(); renderStrip(); });
       const remove = document.createElement("button"); remove.type = "button"; remove.setAttribute("aria-label", "삭제"); remove.textContent = "×";
       remove.addEventListener("click", function () {
         const i = frames.findIndex(function (f) { return f.id === frame.id; });
-        if (i >= 0) { if (frame.revokeThumb) URL.revokeObjectURL(frame.thumb); frames.splice(i, 1); renderStrip(); restartPreview(); }
+        if (i >= 0) { if (frame.revokeThumb) URL.revokeObjectURL(frame.thumb); frames.splice(i, 1); selectedFrameIndex = Math.min(selectedFrameIndex, Math.max(0, frames.length - 1)); renderStrip(); updateTextEditor(); restartPreview(); }
       });
       card.appendChild(remove);
       card.addEventListener("dragstart", function () { dragFrom = frame.id; });
@@ -100,11 +104,44 @@
         event.preventDefault(); if (!dragFrom || dragFrom === frame.id) return;
         const from = frames.findIndex(function (f) { return f.id === dragFrom; });
         const to = frames.findIndex(function (f) { return f.id === frame.id; });
-        const moved = frames.splice(from, 1)[0]; frames.splice(to, 0, moved); renderStrip(); restartPreview();
+        const moved = frames.splice(from, 1)[0]; frames.splice(to, 0, moved); selectedFrameIndex = to; renderStrip(); updateTextEditor(); restartPreview();
       });
       filmstrip.appendChild(card);
     });
     updateCount();
+  }
+  function drawTextOverlay(ctx, overlay, width, height) {
+    if (!overlay || !overlay.text) return;
+    const fontSize = Math.max(10, Math.min(160, Number(overlay.fontSize) || 36));
+    const position = overlay.position || "bottom";
+    const y = position === "top" ? fontSize + 12 : position === "center" ? height / 2 : height - fontSize - 14;
+    ctx.save();
+    ctx.font = "700 " + fontSize + "px sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.lineJoin = "round"; ctx.lineWidth = Math.max(2, fontSize * 0.12);
+    ctx.strokeStyle = "rgba(0,0,0,.82)"; ctx.fillStyle = overlay.color || "#ffffff";
+    String(overlay.text).split("\\n").slice(0, 4).forEach(function (line, index, lines) {
+      const lineY = y + (index - (lines.length - 1) / 2) * fontSize * 1.2;
+      ctx.strokeText(line, width / 2, lineY, width * 0.92);
+      ctx.fillText(line, width / 2, lineY, width * 0.92);
+    });
+    ctx.restore();
+  }
+  function updateTextEditor() {
+    const label = $("text-frame-label");
+    if (!label) return;
+    const isVideo = !!activeVideoUrl;
+    const total = isVideo ? videoPreviewFrames.length : frames.length;
+    const index = isVideo ? videoPreviewIndex : selectedFrameIndex;
+    const frame = isVideo ? videoPreviewFrames[index] : frames[index];
+    label.textContent = total ? "선택 프레임: " + (index + 1) + " / " + total : "프레임을 먼저 추가해 주세요.";
+    const overlay = frame && frame.textOverlay;
+    $("frame-text").value = overlay ? overlay.text : "";
+    $("frame-text-size").value = overlay ? overlay.fontSize : 36;
+    $("frame-text-color").value = overlay ? overlay.color : "#ffffff";
+    $("frame-text-position").value = overlay ? overlay.position : "bottom";
+    $("btn-text-apply").disabled = !frame;
+    $("btn-text-clear").disabled = !overlay;
   }
   function clearVideo() {
     if (activeVideoUrl) URL.revokeObjectURL(activeVideoUrl);
@@ -415,7 +452,9 @@
       } else {
         added.forEach(function (imageData) {
           const canvas = document.createElement("canvas"); canvas.width = imageData.width; canvas.height = imageData.height;
-          canvas.getContext("2d").putImageData(imageData, 0, 0);
+          const previewCtx = canvas.getContext("2d"); previewCtx.putImageData(imageData, 0, 0);
+    drawTextOverlay(previewCtx, imageData.textOverlay, imageData.width, imageData.height);
+    updateTextEditor();
           frames.push({ id: uid(), source: canvas, thumb: canvas.toDataURL("image/png"), kind: "video-frame" });
         });
         renderStrip(); restartPreview();
@@ -502,6 +541,14 @@
           imageDatas.push(ctx.getImageData(0, 0, size.width, size.height));
         }
       }
+      imageDatas = imageDatas.map(function (imageData, index) {
+        const sourceFrame = activeVideoUrl ? imageData : frames[index];
+        if (!sourceFrame || !sourceFrame.textOverlay) return imageData;
+        const overlayCanvas = document.createElement("canvas"); overlayCanvas.width = imageData.width; overlayCanvas.height = imageData.height;
+        const overlayCtx = overlayCanvas.getContext("2d"); overlayCtx.putImageData(imageData, 0, 0);
+        drawTextOverlay(overlayCtx, sourceFrame.textOverlay, imageData.width, imageData.height);
+        return overlayCtx.getImageData(0, 0, imageData.width, imageData.height);
+      });
       const blob = await window.GifLab.encodeGif(imageDatas, {
         width: size.width, height: size.height, delay: exportDelay,
         loop: Number($("opt-loop").value), dither: $("opt-dither").checked
@@ -554,6 +601,7 @@
       temp.width = imageData.width; temp.height = imageData.height;
       temp.getContext("2d").putImageData(imageData, 0, 0);
       ctx.drawImage(temp, 0, 0, canvas.width, canvas.height);
+      if (imageData.textOverlay) drawTextOverlay(ctx, imageData.textOverlay, canvas.width, canvas.height);
       const label = document.createElement("span");
       label.textContent = "프레임 " + (index + 1);
       const remove = document.createElement("button");
@@ -595,6 +643,22 @@
   });
   on("btn-frame-next", "click", function () {
     if (videoPreviewIndex < videoPreviewFrames.length - 1) { videoPreviewIndex++; showVideoPreviewFrame(); }
+  });
+  on("btn-text-apply", "click", function () {
+    const frame = activeVideoUrl ? videoPreviewFrames[videoPreviewIndex] : frames[selectedFrameIndex];
+    if (!frame) return;
+    const value = $("frame-text").value.trim();
+    if (!value) { alert("추가할 문구를 입력해 주세요."); return; }
+    frame.textOverlay = { text: value, fontSize: Number($("frame-text-size").value) || 36, color: $("frame-text-color").value, position: $("frame-text-position").value };
+    if (activeVideoUrl) showVideoPreviewFrame(); else renderStrip();
+    updateTextEditor();
+  });
+  on("btn-text-clear", "click", function () {
+    const frame = activeVideoUrl ? videoPreviewFrames[videoPreviewIndex] : frames[selectedFrameIndex];
+    if (!frame) return;
+    delete frame.textOverlay;
+    if (activeVideoUrl) showVideoPreviewFrame(); else renderStrip();
+    updateTextEditor();
   });
   on("btn-preview-gif", "click", async function () {
     if (!validVideoRange()) return;
@@ -730,5 +794,6 @@
   on("btn-gif-mp4", "click", convertGifToMp4);
 
   on("btn-make", "click", function () { generateGif(true); });
+  updateTextEditor();
   updateCount();
 })();
