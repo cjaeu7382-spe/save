@@ -494,3 +494,14 @@ h2 {
 .frame-card.active { outline:2px solid var(--accent); outline-offset:2px; }
 .frame-thumb-text { position:absolute; left:5px; right:5px; top:50%; transform:translateY(-50%); text-align:center; color:#fff; font-size:12px; font-weight:700; text-shadow:0 1px 3px #000,1px 0 3px #000; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; pointer-events:none; }
 @media (max-width:560px) { .text-editor-options { grid-template-columns:1fr 1fr; } .text-editor .section-heading { align-items:flex-start; flex-direction:column; } }
+
+
+/* Keep the two frame-rotation buttons exactly the same size. */
+.rotation-editor .text-editor-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.rotation-editor .text-editor-actions button {
+  width: 100%;
+  min-width: 0;
+}
