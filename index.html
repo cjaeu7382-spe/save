@@ -138,6 +138,7 @@
           <div class="tool-actions"><button type="button" class="primary" id="btn-crop-apply">Crop 적용</button></div>
           <h3>Rotate / Flip</h3>
           <div class="tool-grid">
+            <label>적용 범위<select id="edit-transform-scope"><option value="all" selected>전체 프레임</option><option value="current">선택한 프레임만</option></select></label>
             <button type="button" class="ghost" id="btn-rotate-90">90° 회전</button>
             <button type="button" class="ghost" id="btn-rotate-180">180° 회전</button>
             <button type="button" class="ghost" id="btn-rotate-270">270° 회전</button>
@@ -174,6 +175,6 @@
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
     <script src="./encoder.js"></script>
-    <script src="./app.js?v=20261125-15"></script>
+    <script src="./app.js?v=20261125-16"></script>
   </body>
 </html>
