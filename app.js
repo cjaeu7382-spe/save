@@ -686,7 +686,7 @@
         videoPreviewReady = true;
         videoPreviewIndex = 0;
         $("video-frame-preview").hidden = false;
-        showVideoPreviewFrame();
+        // 프레임 표시 함수는 편집 입력값을 갱신하므로 텍스트를 먼저 적용한 뒤 표시한다.
       } catch (error) {
         alert("영상 프레임을 준비하지 못했습니다: " + error.message);
         updateTextEditor();
