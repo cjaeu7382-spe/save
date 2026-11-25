@@ -650,47 +650,35 @@
     const file = $("convert-gif-input").files[0]; if (!file) return;
     const status = $("converter-status"), button = $("btn-gif-jpg");
     button.disabled = true; $("btn-gif-mp4").disabled = true;
+    let worker = null;
     try {
-      status.textContent = "GIF 프레임 분석 중…";
-      const gifuct = await loadGifuct();
-      if (!window.JSZip) throw new Error("ZIP 라이브러리를 불러오지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.");
-      const parsed = gifuct.parseGIF(await file.arrayBuffer());
-      const decoded = gifuct.decompressFrames(parsed, true);
-      const width = Number(parsed.lsd && parsed.lsd.width), height = Number(parsed.lsd && parsed.lsd.height);
-      if (!width || !height || !decoded || !decoded.length) throw new Error("유효한 GIF 프레임을 찾지 못했습니다.");
-      const canvas = document.createElement("canvas"); canvas.width = width; canvas.height = height;
-      const composite = document.createElement("canvas"); composite.width = width; composite.height = height;
-      const ctx = canvas.getContext("2d"), cctx = composite.getContext("2d"), zip = new JSZip();
-      const background = parsed.gct && parsed.gct[parsed.lsd.backgroundColorIndex];
-      for (let i = 0; i < decoded.length; i++) {
-        const frame = decoded[i], dims = frame.dims;
-        if (!frame.patch || !dims || !dims.width || !dims.height) continue;
-        const previous = document.createElement("canvas");
-        if (frame.disposalType === 3) {
-          previous.width = width; previous.height = height;
-          previous.getContext("2d").drawImage(composite, 0, 0);
-        }
-        const patchCanvas = document.createElement("canvas"); patchCanvas.width = dims.width; patchCanvas.height = dims.height;
-        const patchCtx = patchCanvas.getContext("2d");
-        patchCtx.putImageData(new ImageData(new Uint8ClampedArray(frame.patch), dims.width, dims.height), 0, 0);
-        cctx.drawImage(patchCanvas, dims.left, dims.top);
-        ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, width, height); ctx.drawImage(composite, 0, 0);
-        const blob = await new Promise(function (resolve) { canvas.toBlob(resolve, "image/jpeg", 0.94); });
-        if (!blob) throw new Error("JPG 이미지 생성에 실패했습니다.");
-        zip.file("frame-" + String(i + 1).padStart(4, "0") + ".jpg", blob);
-        status.textContent = "JPG 프레임 변환 " + (i + 1) + " / " + decoded.length;
-        if (frame.disposalType === 2) {
-          if (background && Array.isArray(background)) {
-            cctx.fillStyle = "rgb(" + background[0] + "," + background[1] + "," + background[2] + ")";
-            cctx.fillRect(dims.left, dims.top, dims.width, dims.height);
-          } else cctx.clearRect(dims.left, dims.top, dims.width, dims.height);
-        } else if (frame.disposalType === 3) cctx.drawImage(previous, 0, 0);
+      if (!("Worker" in window) || !("OffscreenCanvas" in window)) {
+        throw new Error("현재 브라우저가 백그라운드 이미지 변환을 지원하지 않습니다. 최신 Chrome 또는 Edge에서 다시 시도해 주세요.");
       }
-      const blob = await zip.generateAsync({ type: "blob" });
-      triggerBlobDownload(blob, file.name.replace(/\.gif$/i, "") + "-jpg-frames.zip");
-      status.textContent = "완료 · " + decoded.length + "개 프레임을 JPG ZIP 파일로 저장했습니다.";
-    } catch (error) { status.textContent = "JPG 변환 실패: " + (error.message || error); }
-    finally { button.disabled = false; $("btn-gif-mp4").disabled = !$("convert-gif-input").files.length; }
+      status.textContent = "GIF 데이터를 백그라운드 변환 작업으로 전달 중…";
+      const buffer = await file.arrayBuffer();
+      const workerUrl = new URL("./gif-jpg-worker.js?v=20261125-1", window.location.href);
+      const result = await new Promise(function (resolve, reject) {
+        worker = new Worker(workerUrl);
+        worker.onmessage = function (event) {
+          const data = event.data || {};
+          if (data.type === "status") status.textContent = data.message;
+          else if (data.type === "progress") status.textContent = "JPG 프레임 변환 중 · " + data.current + " / " + data.total;
+          else if (data.type === "done") resolve(data);
+          else if (data.type === "error") reject(new Error(data.message || "GIF 변환에 실패했습니다."));
+        };
+        worker.onerror = function (event) { reject(new Error(event.message || "백그라운드 변환 작업을 실행하지 못했습니다.")); };
+        worker.postMessage(buffer, [buffer]);
+      });
+      triggerBlobDownload(result.blob, file.name.replace(/\.gif$/i, "") + "-jpg-frames.zip");
+      status.textContent = "완료 · " + result.count + "개 프레임을 JPG ZIP 파일로 저장했습니다.";
+    } catch (error) {
+      status.textContent = "JPG 변환 실패: " + (error.message || error);
+    } finally {
+      if (worker) worker.terminate();
+      button.disabled = false;
+      $("btn-gif-mp4").disabled = !$("convert-gif-input").files.length;
+    }
   }
   async function convertGifToMp4() {
     const file = $("convert-gif-input").files[0]; if (!file) return;
@@ -706,15 +694,25 @@
           mainName: "main",
           corePath: "https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js"
         });
+        ffmpegInstance.setProgress(function (progressInfo) {
+          const ratio = progressInfo && Number(progressInfo.ratio);
+          if (Number.isFinite(ratio) && ratio >= 0) {
+            status.textContent = "MP4 변환 중 · " + Math.min(99, Math.round(ratio * 100)) + "%";
+          }
+        });
         await ffmpegInstance.load();
       }
-      status.textContent = "GIF를 MP4로 변환 중…";
+      status.textContent = "GIF 데이터를 변환 엔진으로 전달 중…";
+      await new Promise(function (resolve) { setTimeout(resolve, 30); });
       const inputName = "input-" + Date.now() + ".gif";
       const outputName = "output-" + Date.now() + ".mp4";
-      ffmpegInstance.FS("writeFile", inputName, new Uint8Array(await file.arrayBuffer()));
+      const inputBuffer = await file.arrayBuffer();
+      ffmpegInstance.FS("writeFile", inputName, new Uint8Array(inputBuffer));
+      status.textContent = "GIF를 MP4로 변환 중…";
       await ffmpegInstance.run(
         "-i", inputName, "-an", "-movflags", "+faststart",
         "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2,format=yuv420p",
+        "-preset", "ultrafast", "-crf", "28",
         outputName
       );
       const data = ffmpegInstance.FS("readFile", outputName);
@@ -723,7 +721,8 @@
       try { ffmpegInstance.FS("unlink", inputName); ffmpegInstance.FS("unlink", outputName); } catch (_) {}
       status.textContent = "MP4 변환 완료 · " + Math.round(blob.size / 1024) + " KB";
     } catch (error) {
-      status.textContent = "MP4 변환 실패: " + (error.message || error) + " · GIF 파일 크기와 브라우저 메모리, CDN 연결을 확인해 주세요.";
+      status.textContent = "MP4 변환 실패: " + (error.message || error) + " · GIF 용량이 매우 크면 메모리 한계에 도달할 수 있습니다.";
+      try { if (ffmpegInstance) ffmpegInstance.exit(); } catch (_) {}
       ffmpegInstance = null;
     } finally { button.disabled = false; $("btn-gif-jpg").disabled = !$("convert-gif-input").files.length; }
   }
