@@ -535,3 +535,8 @@ h2 {
 .editor-upload-panel { margin:14px 0; }
 .editor-upload-panel[hidden], #generator-source-panel[hidden], #frame-workspace[hidden] { display:none !important; }
 .editor-dropzone { min-height:150px; }
+
+.editor-tools { display:grid; gap:16px; margin:14px 0 20px; }
+.editor-tools[hidden] { display:none !important; }
+.editor-tools .text-editor, .editor-tools .rotation-editor, .editor-tools .settings { margin:0; }
+.editor-tools .settings { display:grid; }
