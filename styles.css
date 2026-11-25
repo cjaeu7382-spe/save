@@ -552,3 +552,47 @@ h2 {
 .tool-grid h3,.advanced-gif-tools h3 { grid-column:1/-1; margin:16px 0 0; color:var(--accent); font-size:13px; }
 .tool-check { display:flex !important; align-items:center; gap:8px !important; }
 .tool-check input { width:auto !important; accent-color:var(--accent); }
+
+
+/* Editing workspace: frames on the left, editing controls on the right. */
+.editor-workbench {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(340px, .8fr);
+  align-items: start;
+  gap: 18px;
+  margin-top: 14px;
+}
+.editor-workbench #frame-workspace {
+  min-width: 0;
+  position: sticky;
+  top: 14px;
+}
+.editor-workbench #filmstrip {
+  max-height: min(68vh, 760px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-content: start;
+  gap: 12px;
+}
+.editor-workbench .editor-tools {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  margin: 0;
+}
+.editor-workbench .editor-tools[hidden] { display: none !important; }
+.editor-workbench #frame-workspace[hidden] { display: none !important; }
+@media (max-width: 900px) {
+  .editor-workbench { grid-template-columns: minmax(0, 1fr); }
+  .editor-workbench #frame-workspace { position: static; }
+  .editor-workbench #filmstrip {
+    max-height: 420px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+@media (max-width: 560px) {
+  .editor-workbench #filmstrip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
