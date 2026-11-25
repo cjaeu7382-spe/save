@@ -23,7 +23,7 @@
   }
   const frames = [];
   let dragFrom = null, previewTimer = 0, objectUrl = "", activeVideoUrl = "";
-  let activeVideoDuration = 0, videoPreviewFrames = [], videoPreviewIndex = 0;
+  let activeVideoDuration = 0, videoPreviewFrames = [], videoPreviewIndex = 0, videoPreviewDelay = 120;
 
   function uid() { return Math.random().toString(36).slice(2); }
   function formatTime(seconds) {
@@ -341,8 +341,7 @@
     canvas.getContext("2d").putImageData(imageData, 0, 0);
     $("video-frame-count").textContent = (videoPreviewIndex + 1) + " / " + videoPreviewFrames.length;
     const start = parseTime($("range-start").value);
-    const delay = Math.max(20, Number($("opt-delay").value) || 120);
-    $("video-frame-time").textContent = formatTime(start + videoPreviewIndex * delay / 1000);
+    $("video-frame-time").textContent = formatTime(start + videoPreviewIndex * videoPreviewDelay / 1000);
     $("btn-frame-prev").disabled = videoPreviewIndex === 0;
     $("btn-frame-next").disabled = videoPreviewIndex >= videoPreviewFrames.length - 1;
   }
@@ -362,6 +361,7 @@
     try {
       const extracted = await extractVideoFrames();
       videoPreviewFrames = extracted.imageDatas;
+      videoPreviewDelay = extracted.delay;
       videoPreviewIndex = 0;
       $("video-frame-preview").hidden = false;
       showVideoPreviewFrame();
