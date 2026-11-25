@@ -46,8 +46,10 @@
     btnMake.disabled = activeVideoUrl ? (!validVideoRange() || (videoPreviewReady && videoPreviewFrames.length < 2)) : frames.length < 2;
     const previewButton = $("btn-preview-gif");
     if (previewButton) {
-      previewButton.hidden = !activeVideoUrl;
-      previewButton.disabled = !validVideoRange();
+      const editorPreview = currentMode === "edit" && frames.length >= 2;
+      previewButton.hidden = !activeVideoUrl && !editorPreview;
+      previewButton.disabled = activeVideoUrl ? !validVideoRange() : !editorPreview;
+      previewButton.textContent = editorPreview ? "편집 결과 GIF 미리보기" : "선택 구간 미리보기";
     }
   }
   function validVideoRange() {
@@ -867,6 +869,10 @@
     updateTextEditor();
   });
   on("btn-preview-gif", "click", async function () {
+    if (currentMode === "edit") {
+      await generateGif(false);
+      return;
+    }
     if (!validVideoRange()) return;
     const button = $("btn-preview-gif");
     button.disabled = true;
