@@ -95,17 +95,7 @@
           <div class="text-editor-actions"><button type="button" id="btn-text-apply" class="primary" disabled>선택 프레임에 적용</button><button type="button" id="btn-text-clear" class="ghost" disabled>텍스트 삭제</button></div>
           <p class="hint">프레임 목록 또는 영상 프레임 미리보기에서 원하는 프레임을 선택한 뒤 적용하세요. 적용한 문구는 해당 프레임에만 표시됩니다.</p>
         </section>
-        <section class="text-editor rotation-editor" aria-label="프레임 회전">
-          <div class="section-heading"><div><p class="eyebrow">FRAME ROTATION</p><h2>프레임 회전</h2></div></div>
-          <label>적용 범위
-            <select id="rotate-scope"><option value="selected">선택한 프레임만</option><option value="all">전체 프레임</option></select>
-          </label>
-          <div class="text-editor-actions">
-            <button type="button" id="btn-rotate-left" class="ghost" disabled>↶ 왼쪽 90°</button>
-            <button type="button" id="btn-rotate-right" class="primary" disabled>↷ 오른쪽 90°</button>
-          </div>
-          <p class="hint">선택한 프레임 또는 전체 프레임을 90도씩 회전합니다. 회전 결과는 GIF 생성에도 반영됩니다.</p>
-        </section>
+
         <form class="settings" id="settings">
           <label>가로 크기 <input id="opt-width" type="number" min="16" max="1280" value="480" /></label>
           <label>맞춤 방식 <select id="opt-fit"><option value="contain">여백 유지</option><option value="cover">화면 채우기</option><option value="stretch">늘이기</option></select></label>
