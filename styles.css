@@ -465,3 +465,9 @@ h2 {
 .converter-actions { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
 .converter-actions button:disabled { opacity:.4; cursor:not-allowed; }
 @media(max-width:520px) { .converter-actions { grid-template-columns:1fr; } }
+
+/* Added-video clip range sliders */
+.add-range-sliders { margin-top: 12px; }
+.add-range-sliders input { width: 100%; accent-color: var(--accent); cursor: pointer; }
+#add-video-range .range-fields input { font-variant-numeric: tabular-nums; }
+#btn-add-video-confirm:disabled { opacity: .4; cursor: not-allowed; }
