@@ -154,12 +154,13 @@
     const list = Array.from(fileList);
     try {
       const videoFile = list.find(function (file) { return file.type.startsWith("video/") || /\.(mp4|webm|mov|m4v)$/i.test(file.name); });
-      if (videoFile) { await loadVideoFile(videoFile); return; }
+      if (videoFile) { await loadVideoFile(videoFile); if ($("btn-sample")) $("btn-sample").hidden = true; return; }
       clearVideo();
       for (const file of list) {
         if (file.type.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp)$/i.test(file.name)) frames.push(await loadImageFile(file));
       }
       renderStrip(); restartPreview();
+      if (frames.length && $("btn-sample")) $("btn-sample").hidden = true;
     } catch (error) { alert(error.message || "파일을 불러오지 못했습니다."); }
   }
   function outputSize(source) {
@@ -217,6 +218,35 @@
     }
     await waitForVideoFrame();
   }
+  async function extractFramesFromFile(file, width, height) {
+    const url = URL.createObjectURL(file), video = document.createElement("video");
+    video.muted = true; video.playsInline = true; video.preload = "auto"; video.src = url;
+    try {
+      await new Promise(function (resolve, reject) {
+        video.onloadedmetadata = resolve;
+        video.onerror = function () { reject(new Error("추가할 영상 파일을 읽을 수 없습니다.")); };
+      });
+      const duration = video.duration;
+      if (!Number.isFinite(duration) || duration <= 0) throw new Error("영상 길이를 확인할 수 없습니다.");
+      const delay = Math.max(20, Number($("opt-delay").value) || 120);
+      const count = Math.max(1, Math.min(60, Math.ceil(duration * 1000 / delay)));
+      const canvas = document.createElement("canvas"); canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true }), output = [];
+      for (let i = 0; i < count; i++) {
+        const time = Math.min(duration - 0.01, duration * i / count);
+        await new Promise(function (resolve, reject) {
+          let timer;
+          const done = function () { clearTimeout(timer); resolve(); };
+          timer = setTimeout(function () { video.removeEventListener("seeked", done); reject(new Error("추가 영상 프레임 추출 시간이 초과되었습니다.")); }, 10000);
+          video.addEventListener("seeked", done, { once: true }); video.currentTime = time;
+        });
+        await new Promise(function (resolve) { requestAnimationFrame(function () { requestAnimationFrame(resolve); }); });
+        drawFitted(ctx, video, width, height, $("opt-fit").value, $("opt-bg").value);
+        output.push(ctx.getImageData(0, 0, width, height));
+      }
+      return output;
+    } finally { video.pause(); video.removeAttribute("src"); video.load(); URL.revokeObjectURL(url); }
+  }
   async function extractVideoFrames() {
     const start = parseTime($("range-start").value), end = parseTime($("range-end").value);
     if (!validVideoRange()) throw new Error("시작 시간과 종료 시간을 올바르게 설정하세요.");
@@ -244,7 +274,7 @@
     on(id, "input", function () { videoPreviewFrames = []; videoPreviewReady = false; $("video-frame-preview").hidden = true; });
     on(id, "change", function () { videoPreviewFrames = []; videoPreviewReady = false; $("video-frame-preview").hidden = true; });
   });
-  on("btn-add", "click", function () { if (fileInput) fileInput.click(); });
+  on("btn-add", "click", function () { const input = $("frame-add-input"); if (input) input.click(); });
   on("btn-sample", "click", async function () {
     clearVideo();
     const colors = ["#e8a45a", "#c46a3a", "#7d9a6f", "#d7c4a3", "#3d6b8a", "#f4efe6"], words = ["FRAME", "LAB", "MAKE", "A", "GIF", "NOW"];
@@ -260,6 +290,35 @@
     renderStrip(); restartPreview();
   });
   if (fileInput) on("file-input", "change", function () { addFiles(fileInput.files); fileInput.value = ""; });
+  on("frame-add-input", "change", async function () {
+    const input = $("frame-add-input"), files = Array.from(input.files || []);
+    input.value = "";
+    if (!files.length) return;
+    try {
+      if (!activeVideoUrl) { await addFiles(files); return; }
+      if (!videoPreviewReady) {
+        const extracted = await extractVideoFrames();
+        videoPreviewFrames = extracted.imageDatas; videoPreviewDelay = extracted.delay;
+        videoPreviewReady = true; videoPreviewIndex = 0;
+      }
+      for (const file of files) {
+        if (file.type.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp)$/i.test(file.name)) {
+          const loaded = await loadImageFile(file);
+          const width = videoPreviewFrames[0].width, height = videoPreviewFrames[0].height;
+          const canvas = document.createElement("canvas"); canvas.width = width; canvas.height = height;
+          const ctx = canvas.getContext("2d", { willReadFrequently: true });
+          drawFitted(ctx, loaded.source, width, height, $("opt-fit").value, $("opt-bg").value);
+          videoPreviewFrames.push(ctx.getImageData(0, 0, width, height));
+          if (loaded.revokeThumb) URL.revokeObjectURL(loaded.thumb);
+        } else if (file.type.startsWith("video/") || /\.(mp4|webm|mov|m4v)$/i.test(file.name)) {
+          const added = await extractFramesFromFile(file, videoPreviewFrames[0].width, videoPreviewFrames[0].height);
+          videoPreviewFrames.push.apply(videoPreviewFrames, added);
+        }
+      }
+      $("video-frame-preview").hidden = false;
+      videoPreviewIndex = videoPreviewFrames.length - 1; showVideoPreviewFrame(); updateCount();
+    } catch (error) { alert("프레임을 추가하지 못했습니다: " + error.message); }
+  });
   if (dropzone) {
     ["dragenter", "dragover"].forEach(function (type) {
       dropzone.addEventListener(type, function (event) { event.preventDefault(); dropzone.classList.add("dragover"); });
@@ -269,9 +328,23 @@
     });
     dropzone.addEventListener("drop", function (event) { if (event.dataTransfer.files.length) addFiles(event.dataTransfer.files); });
   }
-  on("btn-reverse", "click", function () { if (activeVideoUrl) return; frames.reverse(); renderStrip(); restartPreview(); });
+  on("btn-reverse", "click", async function () {
+    if (activeVideoUrl) {
+      try {
+        if (!videoPreviewReady) {
+          const extracted = await extractVideoFrames();
+          videoPreviewFrames = extracted.imageDatas; videoPreviewDelay = extracted.delay; videoPreviewReady = true;
+        }
+        videoPreviewFrames.reverse(); videoPreviewIndex = 0;
+        $("video-frame-preview").hidden = false; showVideoPreviewFrame(); updateCount();
+      } catch (error) { alert("영상 프레임 순서를 뒤집지 못했습니다: " + error.message); }
+      return;
+    }
+    frames.reverse(); renderStrip(); restartPreview();
+  });
   on("btn-clear", "click", function () {
     clearInterval(previewTimer); clearVideo(); clearFrames();
+    if ($("btn-sample")) $("btn-sample").hidden = false;
     if (download) download.hidden = true;
     if (resultGif) resultGif.hidden = true;
     updateCount(); restartPreview();
@@ -290,7 +363,7 @@
     sourceVideo.addEventListener("timeupdate", check);
   });
   async function generateGif(makeDownload) {
-    if (activeVideoUrl ? !validVideoRange() : frames.length < 2) return;
+    if (activeVideoUrl ? (!validVideoRange() || (videoPreviewReady && videoPreviewFrames.length < 2)) : frames.length < 2) return;
     const previewButton = $("btn-preview-gif");
     btnMake.disabled = true;
     if (previewButton) previewButton.disabled = true;
