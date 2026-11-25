@@ -968,6 +968,7 @@
     currentMode = mode;
     $("generator-source-panel").hidden = mode !== "create";
     $("editor-upload-panel").hidden = mode !== "edit";
+    $("editor-tools").hidden = mode !== "edit" || frames.length === 0;
     $("tab-create").classList.toggle("active", mode === "create");
     $("tab-edit").classList.toggle("active", mode === "edit");
     $("tab-create").setAttribute("aria-pressed", String(mode === "create"));
@@ -1024,6 +1025,7 @@
       $("opt-delay").value = Math.max(20, Math.round(totalDelay / decoded.length));
       selectedFrameIndex = 0;
       $("frame-workspace").hidden = false;
+      $("editor-tools").hidden = false;
       renderStrip();
       restartPreview();
       status.textContent = file.name + " · " + decoded.length + "개 프레임 · " + width + " × " + height + "px · 편집할 프레임을 선택하세요.";
