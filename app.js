@@ -698,11 +698,12 @@
     button.disabled = true; $("btn-gif-jpg").disabled = true;
     try {
       if (!window.FFmpeg || !window.FFmpeg.createFFmpeg) throw new Error("MP4 변환 엔진을 불러오지 못했습니다. CDN 연결을 확인한 뒤 새로고침해 주세요.");
+      if (typeof SharedArrayBuffer === "undefined") status.textContent = "현재 호스팅 환경에서는 SharedArrayBuffer를 사용할 수 없어 단일 스레드 변환 엔진으로 실행합니다.";
       if (!ffmpegInstance) {
         status.textContent = "MP4 변환 엔진 준비 중… 처음 실행할 때 다운로드에 시간이 걸릴 수 있습니다.";
         ffmpegInstance = window.FFmpeg.createFFmpeg({
           log: false,
-          corePath: "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js"
+          corePath: "https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js"
         });
         await ffmpegInstance.load();
       }
