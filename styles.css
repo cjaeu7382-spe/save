@@ -548,3 +548,7 @@ h2 {
 .tool-actions { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); }
 .tool-actions button { width:100%; }
 @media(max-width:560px) { .tool-grid { grid-template-columns:1fr 1fr; } .tool-actions { grid-template-columns:1fr 1fr; } }
+
+.tool-grid h3,.advanced-gif-tools h3 { grid-column:1/-1; margin:16px 0 0; color:var(--accent); font-size:13px; }
+.tool-check { display:flex !important; align-items:center; gap:8px !important; }
+.tool-check input { width:auto !important; accent-color:var(--accent); }
