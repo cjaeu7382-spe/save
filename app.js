@@ -245,13 +245,14 @@
     $("btn-text-apply").textContent = overlay ? "텍스트 수정 적용" : "선택 프레임에 적용";
     // 영상은 미리보기 프레임을 아직 추출하지 않았어도 구간이 준비되면
     // 텍스트 적용 버튼을 사용할 수 있도록 한다.
-    $("btn-text-apply").disabled = isVideo
-      ? !(activeVideoDuration > 0 && validVideoRange())
-      : !frame;
-    $("btn-text-clear").disabled = !frame || !overlay;
-    const hasFrames = isVideo ? videoPreviewFrames.length > 0 : frames.length > 0;
-    $("btn-rotate-left").disabled = !hasFrames;
-    $("btn-rotate-right").disabled = !hasFrames;
+    const applyButton = $("btn-text-apply");
+    if (applyButton) {
+      applyButton.disabled = isVideo
+        ? !(activeVideoDuration > 0 && validVideoRange())
+        : !frame;
+    }
+    const clearButton = $("btn-text-clear");
+    if (clearButton) clearButton.disabled = !frame || !overlay;
   }
   function clearVideo() {
     if (activeVideoUrl) URL.revokeObjectURL(activeVideoUrl);
