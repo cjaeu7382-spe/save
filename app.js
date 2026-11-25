@@ -23,7 +23,7 @@
   }
   const frames = [];
   let dragFrom = null, previewTimer = 0, objectUrl = "", activeVideoUrl = "";
-  let activeVideoDuration = 0, videoPreviewFrames = [], videoPreviewIndex = 0, videoPreviewDelay = 120;
+  let activeVideoDuration = 0, videoPreviewFrames = [], videoPreviewIndex = 0, videoPreviewDelay = 120, videoPreviewReady = false;
 
   function uid() { return Math.random().toString(36).slice(2); }
   function formatTime(seconds) {
@@ -42,7 +42,7 @@
   function updateCount() {
     const count = activeVideoUrl ? "영상 구간 선택" : "프레임 " + frames.length;
     frameCount.textContent = count;
-    btnMake.disabled = activeVideoUrl ? (!validVideoRange() || (videoPreviewFrames.length > 0 && videoPreviewFrames.length < 2)) : frames.length < 2;
+    btnMake.disabled = activeVideoUrl ? (!validVideoRange() || (videoPreviewReady && videoPreviewFrames.length < 2)) : frames.length < 2;
     const previewButton = $("btn-preview-gif");
     if (previewButton) {
       previewButton.hidden = !activeVideoUrl;
@@ -67,6 +67,7 @@
       else start = Math.max(0, end - 0.1);
     }
     videoPreviewFrames = [];
+    videoPreviewReady = false;
     $("video-frame-preview").hidden = true;
     const videoStrip = $("video-frame-strip");
     if (videoStrip) videoStrip.innerHTML = "";
@@ -240,8 +241,8 @@
     return { imageDatas: data, size: size, delay: frameDelay };
   }
   ["opt-width", "opt-delay", "opt-fit", "opt-bg"].forEach(function (id) {
-    on(id, "input", function () { videoPreviewFrames = []; $("video-frame-preview").hidden = true; });
-    on(id, "change", function () { videoPreviewFrames = []; $("video-frame-preview").hidden = true; });
+    on(id, "input", function () { videoPreviewFrames = []; videoPreviewReady = false; $("video-frame-preview").hidden = true; });
+    on(id, "change", function () { videoPreviewFrames = []; videoPreviewReady = false; $("video-frame-preview").hidden = true; });
   });
   on("btn-add", "click", function () { if (fileInput) fileInput.click(); });
   on("btn-sample", "click", async function () {
@@ -301,7 +302,7 @@
     try {
       let imageDatas, size, exportDelay = Number($("opt-delay").value) || 120;
       if (activeVideoUrl) {
-        if (videoPreviewFrames.length) {
+        if (videoPreviewReady) {
           imageDatas = videoPreviewFrames;
           size = { width: imageDatas[0].width, height: imageDatas[0].height };
           exportDelay = videoPreviewDelay;
@@ -423,6 +424,7 @@
     try {
       const extracted = await extractVideoFrames();
       videoPreviewFrames = extracted.imageDatas;
+      videoPreviewReady = true;
       videoPreviewDelay = extracted.delay;
       videoPreviewIndex = 0;
       $("video-frame-preview").hidden = false;
