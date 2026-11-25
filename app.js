@@ -24,7 +24,7 @@
   const frames = [];
   let dragFrom = null, previewTimer = 0, objectUrl = "", activeVideoUrl = "", selectedFrameIndex = 0;
   let activeVideoDuration = 0, videoPreviewFrames = [], videoPreviewIndex = 0, videoPreviewDelay = 120, videoPreviewReady = false;
-  let pendingAddVideoFile = null, pendingAddVideoDuration = 0, ffmpegInstance = null, gifuctModulePromise = null;
+  let pendingAddVideoFile = null, pendingAddVideoDuration = 0, ffmpegInstance = null, gifuctModulePromise = null, editSpeedFactor = 1;
 
   function uid() { return Math.random().toString(36).slice(2); }
   function formatTime(seconds) {
@@ -1041,7 +1041,100 @@
     this.value = "";
   });
 
-  on("btn-make", "click", function () { generateGif(true); });
+  function updateEditToolsStatus(message) {
+    const el = $("edit-tools-status");
+    if (el) el.textContent = message;
+  }
+  function cropAllFrames() {
+    if (!frames.length || activeVideoUrl) { updateEditToolsStatus("GIF 편집 모드에서 업로드한 프레임에 사용할 수 있습니다."); return; }
+    const xPct = Math.max(0, Math.min(99, Number($("crop-x").value) || 0));
+    const yPct = Math.max(0, Math.min(99, Number($("crop-y").value) || 0));
+    const wPct = Math.max(1, Math.min(100 - xPct, Number($("crop-w").value) || 100));
+    const hPct = Math.max(1, Math.min(100 - yPct, Number($("crop-h").value) || 100));
+    frames.forEach(function(frame) {
+      const src = frame.source, sw = src.naturalWidth || src.width, sh = src.naturalHeight || src.height;
+      const sx = Math.round(sw*xPct/100), sy = Math.round(sh*yPct/100);
+      const cw = Math.max(1, Math.round(sw*wPct/100)), ch = Math.max(1, Math.round(sh*hPct/100));
+      const canvas=document.createElement("canvas"); canvas.width=cw; canvas.height=ch;
+      canvas.getContext("2d").drawImage(src,sx,sy,cw,ch,0,0,cw,ch);
+      frame.source=canvas; frame.thumb=canvas.toDataURL("image/png"); frame.textBaseSource=null; frame.textOverlay=null;
+    });
+    renderStrip(); restartPreview();
+    updateEditToolsStatus("Crop 적용 완료 · " + wPct + "% × " + hPct + "% 영역을 모든 프레임에 적용했습니다.");
+  }
+  function cutFrames() {
+    if (frames.length < 2) return;
+    const start=Math.max(1,Math.floor(Number($("cut-start").value)||1));
+    const end=Math.min(frames.length,Math.floor(Number($("cut-end").value)||frames.length));
+    if (start>end) { updateEditToolsStatus("Cut 시작 프레임은 종료 프레임보다 작거나 같아야 합니다."); return; }
+    const kept=frames.slice(start-1,end);
+    frames.splice(0,frames.length,...kept); selectedFrameIndex=0;
+    $("cut-start").value=1; $("cut-end").value=frames.length;
+    renderStrip(); restartPreview();
+    updateEditToolsStatus("Cut 완료 · " + start + "–" + end + "번 프레임, 총 " + frames.length + "개를 남겼습니다.");
+  }
+  function reverseEditFrames() {
+    if (frames.length<2) return;
+    frames.reverse(); selectedFrameIndex=0; renderStrip(); restartPreview();
+    updateEditToolsStatus("Reverse 완료 · 프레임 순서를 반대로 변경했습니다.");
+  }
+  function optimizeEditFrames() {
+    if (frames.length<2) return;
+    const before=frames.length, seen=new Set();
+    for (let i=frames.length-1;i>=0;i--) {
+      const f=frames[i], src=f.source, w=src.naturalWidth||src.width, h=src.naturalHeight||src.height;
+      const cv=document.createElement("canvas"); cv.width=w; cv.height=h;
+      const cx=cv.getContext("2d"); cx.drawImage(src,0,0,w,h);
+      const data=cx.getImageData(0,0,w,h).data;
+      let hash=w+"x"+h+":", step=Math.max(4,Math.floor(data.length/2048/4)*4);
+      for(let p=0;p<data.length;p+=step) hash+=data[p]+","+data[p+1]+","+data[p+2]+";";
+      if(seen.has(hash)) { frames.splice(i,1); } else seen.add(hash);
+    }
+    selectedFrameIndex=Math.min(selectedFrameIndex,Math.max(0,frames.length-1));
+    renderStrip(); restartPreview();
+    updateEditToolsStatus("Optimize 완료 · 중복 프레임 " + (before-frames.length) + "개 제거 · " + frames.length + "개 프레임 유지.");
+  }
+  async function convertEditedFrames() {
+    const format=$("edit-format").value;
+    if(format==="gif") { await generateGif(true); return; }
+    if(!window.JSZip) { updateEditToolsStatus("ZIP 변환 라이브러리를 불러오지 못했습니다."); return; }
+    if(!frames.length) return;
+    const zip=new JSZip();
+    const scale=Number($("edit-downsize").value)||1;
+    const targetW=Math.max(16,Math.round((Number($("edit-resize-width").value)||480)*scale));
+    const targetHInput=Number($("edit-resize-height").value)||0;
+    const src0=frames[0].source, baseW=src0.naturalWidth||src0.width, baseH=src0.naturalHeight||src0.height;
+    const targetH=Math.max(16,Math.round((targetHInput||targetW*baseH/baseW)*scale));
+    updateEditToolsStatus(format.toUpperCase()+" 프레임을 ZIP으로 변환하고 있습니다…");
+    for(let i=0;i<frames.length;i++){
+      const src=frames[i].source, sw=src.naturalWidth||src.width, sh=src.naturalHeight||src.height;
+      const cv=document.createElement("canvas"); cv.width=targetW; cv.height=targetH;
+      const cx=cv.getContext("2d"); cx.fillStyle=$("opt-bg").value; cx.fillRect(0,0,targetW,targetH);
+      const scaleFit=Math.min(targetW/sw,targetH/sh), dw=sw*scaleFit, dh=sh*scaleFit;
+      cx.drawImage(src,(targetW-dw)/2,(targetH-dh)/2,dw,dh);
+      const mime=format==="webp"?"image/webp":"image/png";
+      const blob=await new Promise(resolve=>cv.toBlob(resolve,mime,0.9));
+      if(!blob) throw new Error(format+" 변환을 지원하지 않는 브라우저입니다.");
+      zip.file("frame-"+String(i+1).padStart(4,"0")+"."+format,blob);
+    }
+    const blob=await zip.generateAsync({type:"blob"});
+    if(objectUrl) URL.revokeObjectURL(objectUrl);
+    objectUrl=URL.createObjectURL(blob); download.href=objectUrl;
+    download.download="frame-lab-"+format+"-frames.zip"; download.textContent=format.toUpperCase()+" 프레임 ZIP 다운로드"; download.hidden=false;
+    resultGif.hidden=true;
+    updateEditToolsStatus("변환 완료 · " + frames.length + "개 프레임 · " + Math.round(blob.size/1024) + " KB");
+  }
+  on("btn-crop-apply","click",cropAllFrames);
+  on("btn-cut-apply","click",cutFrames);
+  on("btn-edit-reverse","click",reverseEditFrames);
+  on("btn-optimize","click",optimizeEditFrames);
+  on("btn-edit-speed","click",function(){
+    editSpeedFactor=Number($("edit-speed").value)||1;
+    const base=Math.max(20,Number($("opt-delay").value)||120);
+    $("opt-delay").value=Math.max(20,Math.min(2000,Math.round(base/editSpeedFactor)));
+    updateEditToolsStatus("Speed 적용 완료 · "+editSpeedFactor+"배 · 프레임 간격 "+$("opt-delay").value+"ms");
+  });
+  on("btn-make", "click", function () { if(currentMode==="edit" && $("edit-format").value!=="gif") convertEditedFrames().catch(e=>updateEditToolsStatus("변환 실패: "+e.message)); else generateGif(true); });
   updateTextEditor();
   updateCount();
   setMode("create");
