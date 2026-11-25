@@ -150,6 +150,87 @@
     frame.textOverlay = overlay;
     return frame;
   }
+  function rotateFrameImage(frame, isVideo) {
+    if (isVideo) {
+      const width = frame.width, height = frame.height;
+      const baseCanvas = document.createElement("canvas");
+      baseCanvas.width = width; baseCanvas.height = height;
+      baseCanvas.getContext("2d").putImageData(frame, 0, 0);
+      const rotated = document.createElement("canvas");
+      rotated.width = height; rotated.height = width;
+      const ctx = rotated.getContext("2d");
+      ctx.translate(rotated.width / 2, rotated.height / 2);
+      ctx.rotate(Math.PI / 2);
+      ctx.drawImage(baseCanvas, -width / 2, -height / 2);
+      const result = ctx.getImageData(0, 0, rotated.width, rotated.height);
+      // 회전 결과를 기준 이미지로 삼아 이후 텍스트 편집과 회전을 이어간다.
+      return result;
+    }
+    const source = frame.source;
+    const width = source.videoWidth || source.naturalWidth || source.width;
+    const height = source.videoHeight || source.naturalHeight || source.height;
+    const rotated = document.createElement("canvas");
+    rotated.width = height; rotated.height = width;
+    const ctx = rotated.getContext("2d");
+    ctx.translate(rotated.width / 2, rotated.height / 2);
+    ctx.rotate(Math.PI / 2);
+    ctx.drawImage(source, -width / 2, -height / 2);
+    frame.source = rotated;
+    frame.thumb = rotated.toDataURL("image/png");
+    frame.textBaseSource = null;
+    frame.textOverlay = null;
+    return frame;
+  }
+  function rotateSelectedFrames(direction) {
+    const isVideo = !!activeVideoUrl;
+    const scope = $("rotate-scope").value;
+    if (isVideo) {
+      if (!videoPreviewFrames.length) return;
+      const indexes = scope === "all"
+        ? videoPreviewFrames.map(function (_, index) { return index; })
+        : [videoPreviewIndex];
+      indexes.forEach(function (index) {
+        const original = videoPreviewFrames[index];
+        const width = original.width, height = original.height;
+        const source = document.createElement("canvas");
+        source.width = width; source.height = height;
+        source.getContext("2d").putImageData(original, 0, 0);
+        const rotated = document.createElement("canvas");
+        rotated.width = height; rotated.height = width;
+        const ctx = rotated.getContext("2d");
+        ctx.translate(rotated.width / 2, rotated.height / 2);
+        ctx.rotate(direction * Math.PI / 2);
+        ctx.drawImage(source, -width / 2, -height / 2);
+        videoPreviewFrames[index] = ctx.getImageData(0, 0, rotated.width, rotated.height);
+      });
+      showVideoPreviewFrame();
+    } else {
+      if (!frames.length) return;
+      const indexes = scope === "all"
+        ? frames.map(function (_, index) { return index; })
+        : [selectedFrameIndex];
+      indexes.forEach(function (index) {
+        const frame = frames[index];
+        if (!frame) return;
+        const source = frame.source;
+        const width = source.videoWidth || source.naturalWidth || source.width;
+        const height = source.videoHeight || source.naturalHeight || source.height;
+        const rotated = document.createElement("canvas");
+        rotated.width = height; rotated.height = width;
+        const ctx = rotated.getContext("2d");
+        ctx.translate(rotated.width / 2, rotated.height / 2);
+        ctx.rotate(direction * Math.PI / 2);
+        ctx.drawImage(source, -width / 2, -height / 2);
+        frame.source = rotated;
+        frame.thumb = rotated.toDataURL("image/png");
+        frame.textBaseSource = null;
+        frame.textOverlay = null;
+      });
+      renderStrip();
+      restartPreview();
+    }
+    updateTextEditor();
+  }
   function updateTextEditor() {
     const label = $("text-frame-label");
     if (!label) return;
@@ -170,6 +251,9 @@
       ? !(activeVideoDuration > 0 && validVideoRange())
       : !frame;
     $("btn-text-clear").disabled = !frame || !overlay;
+    const hasFrames = isVideo ? videoPreviewFrames.length > 0 : frames.length > 0;
+    $("btn-rotate-left").disabled = !hasFrames;
+    $("btn-rotate-right").disabled = !hasFrames;
   }
   function clearVideo() {
     if (activeVideoUrl) URL.revokeObjectURL(activeVideoUrl);
@@ -666,6 +750,8 @@
   on("btn-frame-next", "click", function () {
     if (videoPreviewIndex < videoPreviewFrames.length - 1) { videoPreviewIndex++; showVideoPreviewFrame(); }
   });
+  on("btn-rotate-left", "click", function () { rotateSelectedFrames(-1); });
+  on("btn-rotate-right", "click", function () { rotateSelectedFrames(1); });
   on("btn-text-apply", "click", async function () {
     const button = $("btn-text-apply");
     const isVideo = !!activeVideoUrl;
