@@ -61,7 +61,13 @@
             </div>
           </div>
         </section>
-        <div class="filmstrip" id="filmstrip" role="list" aria-label="프레임 목록"></div>
+        <section class="add-video-range" id="add-video-range" hidden>
+<div class="section-heading"><div><p class="eyebrow">ADD VIDEO CLIP</p><h2>추가 영상 구간 선택</h2></div><span id="add-video-duration">영상 길이 확인 중</span></div>
+<video id="add-video-source" controls playsinline preload="metadata"></video>
+<div class="range-fields"><label>추가 시작 시간 <input id="add-range-start" type="text" value="00:00:00" /></label><label>추가 종료 시간 <input id="add-range-end" type="text" value="00:00:01" /></label></div>
+<div class="range-summary"><span id="add-range-summary">추가할 구간</span><button type="button" id="btn-add-video-cancel" class="ghost">취소</button><button type="button" id="btn-add-video-confirm" class="primary">선택 구간 프레임 추가</button></div>
+<p class="hint">선택한 구간만 기존 GIF의 프레임에 추가됩니다.</p></section>
+<div class="filmstrip" id="filmstrip" role="list" aria-label="프레임 목록"></div>
         <form class="settings" id="settings">
           <label>가로 크기 <input id="opt-width" type="number" min="16" max="1280" value="480" /></label>
           <label>맞춤 방식 <select id="opt-fit"><option value="contain">여백 유지</option><option value="cover">화면 채우기</option><option value="stretch">늘이기</option></select></label>
@@ -78,7 +84,17 @@
           <a id="download" class="download" hidden>GIF 다운로드</a>
         </div>
       </section>
+      <section class="converter">
+<div class="section-heading"><div><p class="eyebrow">GIF CONVERTER</p><h2>GIF 파일 변환</h2></div></div>
+<p class="hint">GIF를 JPG 프레임 묶음(ZIP) 또는 MP4 동영상으로 변환합니다.</p>
+<label class="converter-file">변환할 GIF 선택 <input id="convert-gif-input" type="file" accept="image/gif,.gif" /></label>
+<div class="converter-actions"><button type="button" class="ghost" id="btn-gif-jpg" disabled>JPG 프레임으로 변환</button><button type="button" class="primary" id="btn-gif-mp4" disabled>MP4로 변환</button></div>
+<p class="hint" id="converter-status" aria-live="polite">GIF 파일을 선택해 주세요. MP4 변환은 첫 실행 시 변환 엔진을 불러옵니다.</p>
+</section>
     </main>
+    <script src="https://cdn.jsdelivr.net/npm/gifuct-js@2.1.2/dist/gifuct.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
     <script src="./encoder.js"></script>
     <script src="./app.js"></script>
   </body>
