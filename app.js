@@ -622,6 +622,42 @@
     const check = function () { if (sourceVideo.currentTime >= stopAt) { sourceVideo.pause(); sourceVideo.currentTime = parseTime($("range-start").value); sourceVideo.removeEventListener("timeupdate", check); } };
     sourceVideo.addEventListener("timeupdate", check);
   });
+  async function downloadEditedOutput(gifBlob, imageDatas) {
+    const format=$("edit-format").value;
+    if(format==="gif") return false;
+    if(format==="jpg") {
+      if(!window.JSZip) throw new Error("JPG ZIP 변환 라이브러리를 불러오지 못했습니다.");
+      const zip=new JSZip();
+      for(let i=0;i<imageDatas.length;i++){
+        const d=imageDatas[i],cv=document.createElement("canvas");cv.width=d.width;cv.height=d.height;
+        cv.getContext("2d").putImageData(d,0,0);
+        const blob=await new Promise(resolve=>cv.toBlob(resolve,"image/jpeg",0.92));
+        if(!blob)throw new Error("JPG 프레임 변환에 실패했습니다.");
+        zip.file("frame-"+String(i+1).padStart(4,"0")+".jpg",blob);
+      }
+      const zipBlob=await zip.generateAsync({type:"blob"});
+      triggerBlobDownload(zipBlob,"frame-lab-jpg-frames.zip");
+      updateEditToolsStatus("JPG 변환 완료 · "+imageDatas.length+"개 프레임을 ZIP으로 저장했습니다.");
+      return true;
+    }
+    if(format==="mp4") {
+      if(!window.FFmpeg||!window.FFmpeg.createFFmpeg)throw new Error("MP4 변환 엔진을 불러오지 못했습니다.");
+      if(!ffmpegInstance){
+        ffmpegInstance=window.FFmpeg.createFFmpeg({log:false,mainName:"main",corePath:"https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js"});
+        await ffmpegInstance.load();
+      }
+      const input="edited-"+Date.now()+".gif",output="edited-"+Date.now()+".mp4";
+      ffmpegInstance.FS("writeFile",input,new Uint8Array(await gifBlob.arrayBuffer()));
+      await ffmpegInstance.run("-i",input,"-an","-movflags","+faststart","-vf","pad=ceil(iw/2)*2:ceil(ih/2)*2,format=yuv420p","-preset","ultrafast","-crf","25",output);
+      const bytes=ffmpegInstance.FS("readFile",output);
+      const mp4=new Blob([new Uint8Array(bytes)],{type:"video/mp4"});
+      triggerBlobDownload(mp4,"frame-lab.mp4");
+      try{ffmpegInstance.FS("unlink",input);ffmpegInstance.FS("unlink",output);}catch(_){}
+      updateEditToolsStatus("MP4 변환 완료 · "+Math.round(mp4.size/1024)+" KB");
+      return true;
+    }
+    return false;
+  }
   async function generateGif(makeDownload) {
     if (activeVideoUrl ? (!validVideoRange() || (videoPreviewReady && videoPreviewFrames.length < 2)) : frames.length < 2) return;
     const previewButton = $("btn-preview-gif");
@@ -1087,7 +1123,7 @@
     }
     selectedFrameIndex=Math.min(selectedFrameIndex,Math.max(0,frames.length-1));
     renderStrip(); restartPreview();
-    updateEditToolsStatus("Optimize 완료 · 중복 프레임 " + (before-frames.length) + "개 제거 · " + frames.length + "개 프레임 유지.");
+    updateEditToolsStatus("Optimize 완료 · 완전히 동일한 이미지 프레임 " + (before-frames.length) + "개를 정리했습니다. 색상 재인코딩 과정에서 미세한 차이가 생길 수 있습니다.");
   }
   async function convertEditedFrames() {
     const format=$("edit-format").value;
