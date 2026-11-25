@@ -46,17 +46,17 @@
           </div>
           <div class="range-summary"><span id="range-summary">선택 구간 0.0초</span><button type="button" id="btn-preview-range" class="ghost">선택 구간 미리보기</button></div>
           <p class="hint">시작·종료 시간을 입력하거나 슬라이더를 움직여 구간을 정하세요. 선택한 구간만 GIF로 변환됩니다.</p>
+          <div class="video-frame-preview" id="video-frame-preview" hidden>
+            <div class="frame-preview-heading"><strong>GIF 프레임 미리보기</strong><span id="video-frame-count">0 / 0</span></div>
+            <canvas id="video-preview-canvas" width="480" height="320"></canvas>
+            <div class="frame-preview-controls">
+              <button type="button" class="ghost" id="btn-frame-prev" disabled>이전 프레임</button>
+              <span id="video-frame-time">00:00:00</span>
+              <button type="button" class="ghost" id="btn-frame-next" disabled>다음 프레임</button>
+            </div>
+          </div>
         </section>
         <div class="filmstrip" id="filmstrip" role="list" aria-label="프레임 목록"></div>
-      </section>
-      <aside class="panel">
-        <div class="preview-card">
-          <div class="preview-head"><h2>미리보기</h2><span id="preview-status">대기</span></div>
-          <div class="preview-stage" id="preview-stage">
-            <canvas id="preview-canvas" width="480" height="320"></canvas>
-            <p class="preview-empty" id="preview-empty">프레임을 넣으면 여기서 재생됩니다.</p>
-          </div>
-        </div>
         <form class="settings" id="settings">
           <label>가로 크기 <input id="opt-width" type="number" min="16" max="1280" value="480" /></label>
           <label>맞춤 방식 <select id="opt-fit"><option value="contain">여백 유지</option><option value="cover">화면 채우기</option><option value="stretch">늘이기</option></select></label>
@@ -66,13 +66,13 @@
           <label class="check"><input id="opt-dither" type="checkbox" /> 디더링 (색 부드럽게)</label>
         </form>
         <div class="export">
-          <button type="button" id="btn-preview-gif" class="ghost" disabled>생성할 GIF 미리보기</button>
+          <button type="button" id="btn-preview-gif" class="ghost" disabled hidden>생성할 GIF 미리보기</button>
           <button type="button" id="btn-make" class="primary" disabled>GIF 만들기</button>
           <div class="progress" hidden id="progress"><div class="progress-bar" id="progress-bar"></div><span id="progress-text">인코딩 중</span></div>
           <img id="result-gif" class="result-gif" alt="생성된 GIF" hidden />
           <a id="download" class="download" hidden>GIF 다운로드</a>
         </div>
-      </aside>
+      </section>
     </main>
     <script src="./encoder.js"></script>
     <script src="./app.js"></script>
