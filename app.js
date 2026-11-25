@@ -234,12 +234,14 @@
       const ctx = canvas.getContext("2d", { willReadFrequently: true }), output = [];
       for (let i = 0; i < count; i++) {
         const time = Math.min(duration - 0.01, duration * i / count);
-        await new Promise(function (resolve, reject) {
-          let timer;
-          const done = function () { clearTimeout(timer); resolve(); };
-          timer = setTimeout(function () { video.removeEventListener("seeked", done); reject(new Error("추가 영상 프레임 추출 시간이 초과되었습니다.")); }, 10000);
-          video.addEventListener("seeked", done, { once: true }); video.currentTime = time;
-        });
+        if (Math.abs(video.currentTime - time) >= 0.015) {
+          await new Promise(function (resolve, reject) {
+            let timer;
+            const done = function () { clearTimeout(timer); resolve(); };
+            timer = setTimeout(function () { video.removeEventListener("seeked", done); reject(new Error("추가 영상 프레임 추출 시간이 초과되었습니다.")); }, 10000);
+            video.addEventListener("seeked", done, { once: true }); video.currentTime = time;
+          });
+        }
         await new Promise(function (resolve) { requestAnimationFrame(function () { requestAnimationFrame(resolve); }); });
         drawFitted(ctx, video, width, height, $("opt-fit").value, $("opt-bg").value);
         output.push(ctx.getImageData(0, 0, width, height));
