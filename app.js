@@ -28,26 +28,36 @@
 
   function uid() { return Math.random().toString(36).slice(2); }
   function formatTime(seconds) {
-    const value = Math.max(0, Number(seconds) || 0);
-    const minutes = Math.floor(value / 60);
-    const secs = (value % 60).toFixed(1).padStart(4, "0");
-    return String(minutes).padStart(2, "0") + ":" + secs;
+    const total = Math.max(0, Math.floor((Number(seconds) || 0) + 0.0001));
+    const hours = Math.floor(total / 3600), minutes = Math.floor((total % 3600) / 60), secs = total % 60;
+    return [hours, minutes, secs].map(function (v) { return String(v).padStart(2, "0"); }).join(":");
+  }
+  function parseTime(value) {
+    const text = String(value || "").trim();
+    if (!text) return NaN;
+    if (/^\d+(\.\d+)?$/.test(text)) return Number(text);
+    const parts = text.split(":");
+    if (parts.length < 2 || parts.length > 3 || parts.some(function (part) { return part === "" || !/^\d+(\.\d+)?$/.test(part); })) return NaN;
+    return parts.length === 2 ? Number(parts[0]) * 60 + Number(parts[1]) : Number(parts[0]) * 3600 + Number(parts[1]) * 60 + Number(parts[2]);
   }
   function updateCount() {
     const count = activeVideoUrl ? "영상 구간 선택" : "프레임 " + frames.length;
     frameCount.textContent = count;
     btnMake.disabled = activeVideoUrl ? !validVideoRange() : frames.length < 2;
+    const previewButton = $("btn-preview-gif");
+    if (previewButton) previewButton.disabled = activeVideoUrl ? !validVideoRange() : frames.length < 2;
     previewEmpty.style.display = (activeVideoUrl || frames.length) ? "none" : "block";
     previewCanvas.style.display = frames.length && !activeVideoUrl ? "block" : "none";
   }
   function validVideoRange() {
-    const start = Number($("range-start").value), end = Number($("range-end").value);
+    const start = parseTime($("range-start").value), end = parseTime($("range-end").value);
     return !!activeVideoUrl && Number.isFinite(start) && Number.isFinite(end) && start >= 0 && end <= activeVideoDuration && end > start;
   }
   function syncRange(source) {
     if (!activeVideoUrl) return;
-    let start = Number($("range-start").value) || 0;
-    let end = Number($("range-end").value) || activeVideoDuration;
+    let start = parseTime($("range-start").value), end = parseTime($("range-end").value);
+    if (!Number.isFinite(start)) start = 0;
+    if (!Number.isFinite(end)) end = activeVideoDuration;
     if (source === "start-slider") start = Number($("range-start-slider").value);
     if (source === "end-slider") end = Number($("range-end-slider").value);
     start = Math.max(0, Math.min(start, Math.max(0, activeVideoDuration - 0.1)));
@@ -56,8 +66,8 @@
       if (source.indexOf("start") === 0) end = Math.min(activeVideoDuration, start + 0.1);
       else start = Math.max(0, end - 0.1);
     }
-    $("range-start").value = start.toFixed(1);
-    $("range-end").value = end.toFixed(1);
+    $("range-start").value = formatTime(start);
+    $("range-end").value = formatTime(end);
     $("range-start-slider").value = start;
     $("range-end-slider").value = end;
     $("range-summary").textContent = "선택 구간 " + (end - start).toFixed(1) + "초 · " + formatTime(start) + "–" + formatTime(end);
@@ -124,7 +134,7 @@
         ["range-start", "range-start-slider"].forEach(function (id) { $(id).max = activeVideoDuration; });
         ["range-end", "range-end-slider"].forEach(function (id) { $(id).max = activeVideoDuration; });
         $("range-start").value = "0"; $("range-start-slider").value = "0";
-        $("range-end").value = activeVideoDuration.toFixed(1); $("range-end-slider").value = activeVideoDuration;
+        $("range-end").value = formatTime(activeVideoDuration); $("range-end-slider").value = activeVideoDuration;
         videoRange.hidden = false; syncRange("init"); restartPreview(); resolve();
       };
       sourceVideo.onerror = function () { reject(new Error("이 파일의 영상을 열 수 없습니다. MP4 등 브라우저에서 지원하는 형식인지 확인하세요.")); };
@@ -166,8 +176,8 @@
     if (activeVideoUrl) {
       previewCanvas.style.display = "none"; previewEmpty.style.display = "none";
       previewStatus.textContent = "영상 구간 선택";
-      const start = Number($("range-start").value) || 0;
-      if (sourceVideo.currentTime < start || sourceVideo.currentTime > Number($("range-end").value)) sourceVideo.currentTime = start;
+      const start = parseTime($("range-start").value) || 0;
+      if (sourceVideo.currentTime < start || sourceVideo.currentTime > parseTime($("range-end").value)) sourceVideo.currentTime = start;
       return;
     }
     if (!frames.length) { previewStatus.textContent = "대기"; updateCount(); return; }
@@ -213,7 +223,7 @@
     await waitForVideoFrame();
   }
   async function extractVideoFrames() {
-    const start = Number($("range-start").value), end = Number($("range-end").value);
+    const start = parseTime($("range-start").value), end = parseTime($("range-end").value);
     if (!validVideoRange()) throw new Error("시작 시간과 종료 시간을 올바르게 설정하세요.");
     sourceVideo.pause();
     const targetDelay = Math.max(20, Number($("opt-delay").value) || 120);
@@ -271,20 +281,29 @@
     if (resultGif) resultGif.hidden = true;
     updateCount(); restartPreview();
   });
-  ["range-start", "range-end"].forEach(function (id) { on(id, "input", function () { syncRange(id); }); });
+  ["range-start", "range-end"].forEach(function (id) {
+    on(id, "change", function () { syncRange(id); });
+    on(id, "keydown", function (event) { if (event.key === "Enter") { event.preventDefault(); syncRange(id); } });
+  });
   on("range-start-slider", "input", function () { syncRange("start-slider"); });
   on("range-end-slider", "input", function () { syncRange("end-slider"); });
   on("btn-preview-range", "click", async function () {
     if (!validVideoRange() || !sourceVideo) return;
-    sourceVideo.pause(); await seekVideo(Number($("range-start").value)); sourceVideo.play();
+    sourceVideo.pause(); await seekVideo(parseTime($("range-start").value)); sourceVideo.play();
     const stopAt = Number($("range-end").value);
-    const check = function () { if (sourceVideo.currentTime >= stopAt) { sourceVideo.pause(); sourceVideo.currentTime = Number($("range-start").value); sourceVideo.removeEventListener("timeupdate", check); } };
+    const check = function () { if (sourceVideo.currentTime >= stopAt) { sourceVideo.pause(); sourceVideo.currentTime = parseTime($("range-start").value); sourceVideo.removeEventListener("timeupdate", check); } };
     sourceVideo.addEventListener("timeupdate", check);
   });
-  $("btn-make").addEventListener("click", async function () {
+  async function generateGif(makeDownload) {
     if (activeVideoUrl ? !validVideoRange() : frames.length < 2) return;
-    btnMake.disabled = true; progress.hidden = false; download.hidden = true; resultGif.hidden = true;
-    progressBar.style.width = "0%"; progressText.textContent = "캔버스 준비 중";
+    const previewButton = $("btn-preview-gif");
+    btnMake.disabled = true;
+    if (previewButton) previewButton.disabled = true;
+    progress.hidden = false;
+    if (makeDownload) download.hidden = true;
+    resultGif.hidden = true;
+    progressBar.style.width = "0%";
+    progressText.textContent = makeDownload ? "GIF 생성 준비 중" : "미리보기 생성 중";
     try {
       let imageDatas, size, exportDelay = Number($("opt-delay").value) || 120;
       if (activeVideoUrl) {
@@ -306,14 +325,22 @@
       }, function (ratio) {
         const offset = activeVideoUrl ? 0.35 : 0;
         progressBar.style.width = Math.round((offset + ratio * (1 - offset)) * 100) + "%";
-        progressText.textContent = "GIF 인코딩 " + Math.round(ratio * 100) + "%";
+        progressText.textContent = (makeDownload ? "GIF 인코딩 " : "미리보기 인코딩 ") + Math.round(ratio * 100) + "%";
       });
       if (objectUrl) URL.revokeObjectURL(objectUrl);
-      objectUrl = URL.createObjectURL(blob); download.href = objectUrl; download.download = "frame-lab.gif";
-      download.hidden = false; resultGif.src = objectUrl; resultGif.hidden = false;
-      progressText.textContent = "완료 · " + Math.round(blob.size / 1024) + " KB";
+      objectUrl = URL.createObjectURL(blob);
+      resultGif.src = objectUrl; resultGif.hidden = false;
+      if (makeDownload) {
+        download.href = objectUrl; download.download = "frame-lab.gif"; download.hidden = false;
+        progressText.textContent = "완료 · " + Math.round(blob.size / 1024) + " KB";
+      } else {
+        download.hidden = true;
+        progressText.textContent = "미리보기 완료 · " + Math.round(blob.size / 1024) + " KB";
+      }
     } catch (error) { progressText.textContent = "실패: " + error.message; }
     finally { updateCount(); }
-  });
+  }
+  on("btn-preview-gif", "click", function () { generateGif(false); });
+  on("btn-make", "click", function () { generateGif(true); });
   updateCount();
 })();
