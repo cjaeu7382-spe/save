@@ -1043,6 +1043,8 @@
         }
       }
       $("opt-width").value = Math.min(1280, width);
+      $("edit-resize-width").value = Math.min(1280, width);
+      $("edit-resize-height").value = 0;
       $("opt-delay").value = Math.max(20, Math.round(totalDelay / decoded.length));
       selectedFrameIndex = 0;
       $("frame-workspace").hidden = false;
