@@ -97,7 +97,6 @@
     return new Promise(function (resolve, reject) {
       clearVideo(); clearFrames();
       activeVideoUrl = URL.createObjectURL(file);
-      sourceVideo.src = activeVideoUrl;
       sourceVideo.onloadedmetadata = function () {
         activeVideoDuration = sourceVideo.duration;
         if (!Number.isFinite(activeVideoDuration) || activeVideoDuration <= 0) { reject(new Error("영상 길이를 확인할 수 없습니다.")); return; }
@@ -109,6 +108,8 @@
         videoRange.hidden = false; syncRange("init"); restartPreview(); resolve();
       };
       sourceVideo.onerror = function () { reject(new Error("이 파일의 영상을 열 수 없습니다. MP4 등 브라우저에서 지원하는 형식인지 확인하세요.")); };
+      sourceVideo.src = activeVideoUrl;
+      sourceVideo.load();
     });
   }
   async function addFiles(fileList) {
@@ -162,12 +163,9 @@
     paint(); previewTimer = setInterval(paint, delay);
   }
   async function waitForVideoFrame() {
-    if (typeof sourceVideo.requestVideoFrameCallback === "function") {
-      await new Promise(function (resolve) {
-        sourceVideo.requestVideoFrameCallback(function () { resolve(); });
-      });
-      return;
-    }
+    // The video is paused during extraction, so requestVideoFrameCallback can
+    // wait forever for a playback frame. Two paint cycles let the seeked frame
+    // become available to drawImage without requiring playback.
     await new Promise(function (resolve) {
       requestAnimationFrame(function () { requestAnimationFrame(resolve); });
     });
