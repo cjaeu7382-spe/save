@@ -453,3 +453,15 @@ h2 {
 .video-frame-thumb.active span { color:var(--accent); }
 .remove-video-frame { position:absolute; top:3px; right:3px; width:22px; height:22px; padding:0; border:1px solid rgba(255,255,255,.2); border-radius:50%; background:rgba(0,0,0,.78); color:#fff; line-height:1; }
 .remove-video-frame:hover { background:var(--danger); }
+
+.add-video-range, .converter { margin:16px 0; padding:18px; border:1px solid rgba(232,164,90,.28); border-radius:var(--radius); background:rgba(29,24,20,.82); }
+.add-video-range[hidden] { display:none !important; }
+#add-video-source { display:block; width:100%; max-height:300px; border-radius:14px; background:#080706; }
+#add-video-range .range-fields { margin-top:12px; }
+#add-video-range .range-summary { justify-content:flex-start; }
+#btn-add-video-confirm { width:auto; margin-left:auto; }
+.converter-file { display:grid; gap:8px; margin-top:14px; color:var(--muted); font-size:13px; }
+.converter-file input { width:100%; color:var(--ink); }
+.converter-actions { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
+.converter-actions button:disabled { opacity:.4; cursor:not-allowed; }
+@media(max-width:520px) { .converter-actions { grid-template-columns:1fr; } }
