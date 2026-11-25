@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=20261125-8" />
+    <link rel="stylesheet" href="./styles.css?v=20261125-9" />
   </head>
   <body>
     <div class="grain" aria-hidden="true"></div>
@@ -83,6 +83,17 @@
           </label>
           <p class="hint" id="edit-gif-status" aria-live="polite">GIF 파일을 선택하면 프레임별 편집을 시작할 수 있습니다.</p>
         </section>
+        <div class="editor-workbench">
+        <div id="frame-workspace">
+<div class="filmstrip" id="filmstrip" role="list" aria-label="프레임 목록"></div>
+        <div class="export">
+          <button type="button" id="btn-preview-gif" class="ghost" disabled hidden>생성할 GIF 미리보기</button>
+          <button type="button" id="btn-make" class="primary" disabled>GIF 만들기</button>
+          <div class="progress" hidden id="progress"><div class="progress-bar" id="progress-bar"></div><span id="progress-text">인코딩 중</span></div>
+          <img id="result-gif" class="result-gif" alt="생성된 GIF" hidden />
+          <a id="download" class="download" hidden>GIF 다운로드</a>
+        </div>
+        </div>
         <div class="editor-tools" id="editor-tools" hidden>
         <section class="text-editor" aria-label="프레임 텍스트 편집">
           <div class="section-heading"><div><p class="eyebrow">FRAME TEXT</p><h2>선택한 프레임에 텍스트 추가</h2></div><span id="text-frame-label">프레임을 먼저 추가해 주세요.</span></div>
@@ -148,17 +159,6 @@
           </div>
           <p class="hint" id="edit-tools-status" aria-live="polite">편집한 뒤 저장 형식을 선택하고 저장 버튼을 누르세요.</p>
         </section>
-
-        </div>
-        <div id="frame-workspace">
-<div class="filmstrip" id="filmstrip" role="list" aria-label="프레임 목록"></div>
-        <div class="export">
-          <button type="button" id="btn-preview-gif" class="ghost" disabled hidden>생성할 GIF 미리보기</button>
-          <button type="button" id="btn-make" class="primary" disabled>GIF 만들기</button>
-          <div class="progress" hidden id="progress"><div class="progress-bar" id="progress-bar"></div><span id="progress-text">인코딩 중</span></div>
-          <img id="result-gif" class="result-gif" alt="생성된 GIF" hidden />
-          <a id="download" class="download" hidden>GIF 다운로드</a>
-        </div>
         </div>
       </section>
       <section class="converter">
