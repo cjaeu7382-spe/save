@@ -962,7 +962,84 @@
   on("btn-gif-jpg", "click", convertGifToJpg);
   on("btn-gif-mp4", "click", convertGifToMp4);
 
+
+  let currentMode = "create";
+  function setMode(mode) {
+    currentMode = mode;
+    $("generator-source-panel").hidden = mode !== "create";
+    $("editor-upload-panel").hidden = mode !== "edit";
+    $("tab-create").classList.toggle("active", mode === "create");
+    $("tab-edit").classList.toggle("active", mode === "edit");
+    $("tab-create").setAttribute("aria-pressed", String(mode === "create"));
+    $("tab-edit").setAttribute("aria-pressed", String(mode === "edit"));
+    $("frame-workspace").hidden = mode === "edit" && frames.length === 0;
+    if (mode === "edit") {
+      clearVideo();
+      if ($("btn-sample")) $("btn-sample").hidden = true;
+      $("edit-gif-status").textContent = frames.length ? "불러온 GIF 프레임을 편집할 수 있습니다." : "GIF 파일을 선택하면 프레임별 편집을 시작할 수 있습니다.";
+    } else {
+      $("frame-workspace").hidden = false;
+    }
+  }
+  on("tab-create", "click", function () { setMode("create"); });
+  on("tab-edit", "click", function () { setMode("edit"); });
+  async function loadGifForEditing(file) {
+    if (!file) return;
+    const status = $("edit-gif-status");
+    status.textContent = "GIF 프레임을 분석하고 있습니다…";
+    $("edit-gif-input").disabled = true;
+    try {
+      const api = await loadGifuct();
+      const parsed = api.parseGIF(await file.arrayBuffer());
+      const decoded = api.decompressFrames(parsed, true);
+      if (!decoded || !decoded.length) throw new Error("GIF에서 프레임을 찾지 못했습니다.");
+      const width = parsed.lsd.width, height = parsed.lsd.height;
+      if (!width || !height) throw new Error("GIF 이미지 크기를 확인할 수 없습니다.");
+      clearVideo();
+      clearFrames();
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      let previousCanvas = null, totalDelay = 0;
+      for (let i = 0; i < decoded.length; i++) {
+        const frame = decoded[i];
+        if (frame.disposalType === 3 && !previousCanvas) previousCanvas = ctx.getImageData(0, 0, width, height);
+        const patch = new ImageData(new Uint8ClampedArray(frame.patch), frame.dims.width, frame.dims.height);
+        ctx.putImageData(patch, frame.dims.left, frame.dims.top);
+        const snapshot = document.createElement("canvas");
+        snapshot.width = width; snapshot.height = height;
+        snapshot.getContext("2d").drawImage(canvas, 0, 0);
+        const delay = Math.max(20, Number(frame.delay) || 100);
+        totalDelay += delay;
+        frames.push({ id: uid(), source: snapshot, thumb: snapshot.toDataURL("image/png"), kind: "gif-frame", delay: delay });
+        if (frame.disposalType === 2) {
+          ctx.clearRect(frame.dims.left, frame.dims.top, frame.dims.width, frame.dims.height);
+        } else if (frame.disposalType === 3 && previousCanvas) {
+          ctx.putImageData(previousCanvas, 0, 0);
+          previousCanvas = null;
+        }
+      }
+      $("opt-width").value = Math.min(1280, width);
+      $("opt-delay").value = Math.max(20, Math.round(totalDelay / decoded.length));
+      selectedFrameIndex = 0;
+      $("frame-workspace").hidden = false;
+      renderStrip();
+      restartPreview();
+      status.textContent = file.name + " · " + decoded.length + "개 프레임 · " + width + " × " + height + "px · 편집할 프레임을 선택하세요.";
+    } catch (error) {
+      status.textContent = "GIF 업로드 실패: " + (error.message || error);
+    } finally {
+      $("edit-gif-input").disabled = false;
+    }
+  }
+  on("edit-gif-input", "change", function () {
+    const file = this.files && this.files[0];
+    if (file) loadGifForEditing(file);
+    this.value = "";
+  });
+
   on("btn-make", "click", function () { generateGif(true); });
   updateTextEditor();
   updateCount();
+  setMode("create");
 })();
