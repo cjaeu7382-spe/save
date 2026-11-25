@@ -438,3 +438,18 @@ h2 {
   grid-template-columns: minmax(0, 1fr) !important;
 }
 .stage { width: 100%; }
+
+
+/* Video GIF frame timeline: horizontal, scrollable thumbnails around selection. */
+.video-frame-strip-wrap { margin-top:16px; }
+.video-frame-strip-title { display:flex; justify-content:space-between; gap:10px; margin-bottom:9px; font-size:12px; }
+.video-frame-strip-title span { color:var(--muted); }
+.video-frame-strip { display:flex; gap:9px; overflow-x:auto; padding:8px 4px 12px; scroll-snap-type:x mandatory; scrollbar-width:thin; scrollbar-color:var(--accent-2) #151210; }
+.video-frame-thumb { position:relative; flex:0 0 124px; min-width:0; padding:7px; display:flex; flex-direction:column; align-items:center; gap:6px; border:1px solid var(--line); border-radius:12px; background:#151210; cursor:grab; scroll-snap-align:center; transition:border-color .15s, background .15s; }
+.video-frame-thumb.active { border:2px solid var(--accent); background:rgba(232,164,90,.12); }
+.video-frame-thumb.drag-target { border-color:var(--accent-2); transform:scale(.97); }
+.video-frame-thumb canvas { display:block; max-width:100%; height:72px; object-fit:contain; border-radius:6px; }
+.video-frame-thumb span { color:var(--muted); font-size:11px; }
+.video-frame-thumb.active span { color:var(--accent); }
+.remove-video-frame { position:absolute; top:3px; right:3px; width:22px; height:22px; padding:0; border:1px solid rgba(255,255,255,.2); border-radius:50%; background:rgba(0,0,0,.78); color:#fff; line-height:1; }
+.remove-video-frame:hover { background:var(--danger); }
