@@ -505,3 +505,25 @@ h2 {
   width: 100%;
   min-width: 0;
 }
+
+
+/* Preserve the complete frame shape in thumbnails and the video preview. */
+.frame-card img,
+.frame-card video {
+  object-fit: contain;
+  background: #080706;
+}
+#video-preview-canvas {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: min(65vh, 520px);
+  margin: 0 auto;
+  object-fit: contain;
+}
+.video-frame-thumb canvas {
+  width: auto;
+  height: 72px;
+  max-width: 100%;
+  object-fit: contain;
+}
