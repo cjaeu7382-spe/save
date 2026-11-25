@@ -64,7 +64,8 @@
         <section class="add-video-range" id="add-video-range" hidden>
 <div class="section-heading"><div><p class="eyebrow">ADD VIDEO CLIP</p><h2>추가 영상 구간 선택</h2></div><span id="add-video-duration">영상 길이 확인 중</span></div>
 <video id="add-video-source" controls playsinline preload="metadata"></video>
-<div class="range-fields"><label>추가 시작 시간 <input id="add-range-start" type="text" value="00:00:00" /></label><label>추가 종료 시간 <input id="add-range-end" type="text" value="00:00:01" /></label></div>
+<div class="range-fields"><label>추가 시작 시간 <input id="add-range-start" type="text" inputmode="numeric" value="00:00:00" /></label><label>추가 종료 시간 <input id="add-range-end" type="text" inputmode="numeric" value="00:00:01" /></label></div>
+<div class="range-sliders add-range-sliders"><label>시작 위치 <input id="add-range-start-slider" type="range" min="0" max="1" step="0.01" value="0" /></label><label>종료 위치 <input id="add-range-end-slider" type="range" min="0" max="1" step="0.01" value="1" /></label></div>
 <div class="range-summary"><span id="add-range-summary">추가할 구간</span><button type="button" id="btn-add-video-cancel" class="ghost">취소</button><button type="button" id="btn-add-video-confirm" class="primary">선택 구간 프레임 추가</button></div>
 <p class="hint">선택한 구간만 기존 GIF의 프레임에 추가됩니다.</p></section>
 <div class="filmstrip" id="filmstrip" role="list" aria-label="프레임 목록"></div>
@@ -96,6 +97,6 @@
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
     <script src="./encoder.js"></script>
-    <script src="./app.js"></script>
+    <script src="./app.js?v=20261125-2"></script>
   </body>
 </html>
