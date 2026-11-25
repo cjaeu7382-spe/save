@@ -7,8 +7,7 @@
     return element;
   }
   const fileInput = $("file-input"), dropzone = $("dropzone"), filmstrip = $("filmstrip");
-  const frameCount = $("frame-count"), previewCanvas = $("preview-canvas"), previewEmpty = $("preview-empty");
-  const previewStatus = $("preview-status"), btnMake = $("btn-make"), progress = $("progress");
+  const frameCount = $("frame-count"), btnMake = $("btn-make"), progress = $("progress");
   const progressBar = $("progress-bar"), progressText = $("progress-text"), download = $("download");
   const resultGif = $("result-gif"), videoRange = $("video-range");
   // Recover gracefully if an older/cached HTML page is missing the video element.
@@ -23,8 +22,8 @@
     videoRange.insertBefore(sourceVideo, rangeFields || null);
   }
   const frames = [];
-  let dragFrom = null, previewTimer = 0, previewIndex = 0, objectUrl = "", activeVideoUrl = "";
-  let activeVideoDuration = 0;
+  let dragFrom = null, previewTimer = 0, objectUrl = "", activeVideoUrl = "";
+  let activeVideoDuration = 0, videoPreviewFrames = [], videoPreviewIndex = 0;
 
   function uid() { return Math.random().toString(36).slice(2); }
   function formatTime(seconds) {
@@ -45,9 +44,10 @@
     frameCount.textContent = count;
     btnMake.disabled = activeVideoUrl ? !validVideoRange() : frames.length < 2;
     const previewButton = $("btn-preview-gif");
-    if (previewButton) previewButton.disabled = activeVideoUrl ? !validVideoRange() : frames.length < 2;
-    previewEmpty.style.display = (activeVideoUrl || frames.length) ? "none" : "block";
-    previewCanvas.style.display = frames.length && !activeVideoUrl ? "block" : "none";
+    if (previewButton) {
+      previewButton.hidden = !activeVideoUrl;
+      previewButton.disabled = !validVideoRange();
+    }
   }
   function validVideoRange() {
     const start = parseTime($("range-start").value), end = parseTime($("range-end").value);
@@ -63,9 +63,11 @@
     start = Math.max(0, Math.min(start, Math.max(0, activeVideoDuration - 0.1)));
     end = Math.max(0.1, Math.min(end, activeVideoDuration));
     if (end <= start) {
-      if (source.indexOf("start") === 0) end = Math.min(activeVideoDuration, start + 0.1);
+      if (source === "range-start" || source === "start-slider") end = Math.min(activeVideoDuration, start + 0.1);
       else start = Math.max(0, end - 0.1);
     }
+    videoPreviewFrames = [];
+    $("video-frame-preview").hidden = true;
     $("range-start").value = formatTime(start);
     $("range-end").value = formatTime(end);
     $("range-start-slider").value = start;
@@ -109,6 +111,9 @@
       sourceVideo.load();
     }
     if (videoRange) videoRange.hidden = true;
+    videoPreviewFrames = [];
+    const framePreview = $("video-frame-preview");
+    if (framePreview) framePreview.hidden = true;
   }
   function clearFrames() {
     frames.forEach(function (frame) { if (frame.revokeThumb) URL.revokeObjectURL(frame.thumb); });
@@ -133,7 +138,7 @@
         $("video-duration-label").textContent = "전체 " + formatTime(activeVideoDuration);
         ["range-start", "range-start-slider"].forEach(function (id) { $(id).max = activeVideoDuration; });
         ["range-end", "range-end-slider"].forEach(function (id) { $(id).max = activeVideoDuration; });
-        $("range-start").value = "0"; $("range-start-slider").value = "0";
+        $("range-start").value = "00:00:00"; $("range-start-slider").value = "0";
         $("range-end").value = formatTime(activeVideoDuration); $("range-end-slider").value = activeVideoDuration;
         videoRange.hidden = false; syncRange("init"); restartPreview(); resolve();
       };
@@ -173,24 +178,11 @@
   }
   function restartPreview() {
     clearInterval(previewTimer);
-    if (activeVideoUrl) {
-      previewCanvas.style.display = "none"; previewEmpty.style.display = "none";
-      previewStatus.textContent = "영상 구간 선택";
+    if (activeVideoUrl && sourceVideo) {
       const start = parseTime($("range-start").value) || 0;
-      if (sourceVideo.currentTime < start || sourceVideo.currentTime > parseTime($("range-end").value)) sourceVideo.currentTime = start;
-      return;
+      const end = parseTime($("range-end").value);
+      if (sourceVideo.currentTime < start || sourceVideo.currentTime > end) sourceVideo.currentTime = start;
     }
-    if (!frames.length) { previewStatus.textContent = "대기"; updateCount(); return; }
-    const size = outputSize(frames[0].source);
-    previewCanvas.width = size.width; previewCanvas.height = size.height;
-    previewIndex = 0;
-    const delay = Number($("opt-delay").value) || 120, ctx = previewCanvas.getContext("2d");
-    const paint = function () {
-      drawFitted(ctx, frames[previewIndex].source, size.width, size.height, $("opt-fit").value, $("opt-bg").value);
-      previewStatus.textContent = (previewIndex + 1) + " / " + frames.length;
-      previewIndex = (previewIndex + 1) % frames.length;
-    };
-    paint(); previewTimer = setInterval(paint, delay);
   }
   async function waitForVideoFrame() {
     // The video is paused during extraction, so requestVideoFrameCallback can
@@ -246,8 +238,8 @@
     return { imageDatas: data, size: size, delay: frameDelay };
   }
   ["opt-width", "opt-delay", "opt-fit", "opt-bg"].forEach(function (id) {
-    on(id, "input", restartPreview);
-    on(id, "change", restartPreview);
+    on(id, "input", function () { videoPreviewFrames = []; $("video-frame-preview").hidden = true; });
+    on(id, "change", function () { videoPreviewFrames = []; $("video-frame-preview").hidden = true; });
   });
   on("btn-add", "click", function () { if (fileInput) fileInput.click(); });
   on("btn-sample", "click", async function () {
@@ -276,7 +268,7 @@
   }
   on("btn-reverse", "click", function () { if (activeVideoUrl) return; frames.reverse(); renderStrip(); restartPreview(); });
   on("btn-clear", "click", function () {
-    clearInterval(previewTimer); clearVideo(); clearFrames(); if (previewStatus) previewStatus.textContent = "대기";
+    clearInterval(previewTimer); clearVideo(); clearFrames();
     if (download) download.hidden = true;
     if (resultGif) resultGif.hidden = true;
     updateCount(); restartPreview();
@@ -340,7 +332,47 @@
     } catch (error) { progressText.textContent = "실패: " + error.message; }
     finally { updateCount(); }
   }
-  on("btn-preview-gif", "click", function () { generateGif(false); });
+  function showVideoPreviewFrame() {
+    if (!videoPreviewFrames.length) return;
+    const canvas = $("video-preview-canvas");
+    const imageData = videoPreviewFrames[videoPreviewIndex];
+    canvas.width = imageData.width;
+    canvas.height = imageData.height;
+    canvas.getContext("2d").putImageData(imageData, 0, 0);
+    $("video-frame-count").textContent = (videoPreviewIndex + 1) + " / " + videoPreviewFrames.length;
+    const start = parseTime($("range-start").value);
+    const delay = Math.max(20, Number($("opt-delay").value) || 120);
+    $("video-frame-time").textContent = formatTime(start + videoPreviewIndex * delay / 1000);
+    $("btn-frame-prev").disabled = videoPreviewIndex === 0;
+    $("btn-frame-next").disabled = videoPreviewIndex >= videoPreviewFrames.length - 1;
+  }
+  on("btn-frame-prev", "click", function () {
+    if (videoPreviewIndex > 0) { videoPreviewIndex--; showVideoPreviewFrame(); }
+  });
+  on("btn-frame-next", "click", function () {
+    if (videoPreviewIndex < videoPreviewFrames.length - 1) { videoPreviewIndex++; showVideoPreviewFrame(); }
+  });
+  on("btn-preview-gif", "click", async function () {
+    if (!validVideoRange()) return;
+    const button = $("btn-preview-gif");
+    button.disabled = true;
+    progress.hidden = false;
+    progressBar.style.width = "0%";
+    progressText.textContent = "미리보기 프레임 추출 준비 중";
+    try {
+      const extracted = await extractVideoFrames();
+      videoPreviewFrames = extracted.imageDatas;
+      videoPreviewIndex = 0;
+      $("video-frame-preview").hidden = false;
+      showVideoPreviewFrame();
+      progressBar.style.width = "100%";
+      progressText.textContent = "프레임 미리보기 준비 완료 · " + videoPreviewFrames.length + "장";
+    } catch (error) {
+      progressText.textContent = "미리보기 실패: " + error.message;
+    } finally {
+      updateCount();
+    }
+  });
   on("btn-make", "click", function () { generateGif(true); });
   updateCount();
 })();
