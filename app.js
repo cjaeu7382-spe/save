@@ -297,7 +297,24 @@
     input.value = "";
     if (!files.length) return;
     try {
-      if (!activeVideoUrl) { await addFiles(files); return; }
+      if (!activeVideoUrl) {
+        for (const file of files) {
+          if (file.type.startsWith("image/") || /\\.(png|jpe?g|gif|webp|bmp)$/i.test(file.name)) {
+            frames.push(await loadImageFile(file));
+          } else if (file.type.startsWith("video/") || /\\.(mp4|webm|mov|m4v)$/i.test(file.name)) {
+            const base = frames.length ? outputSize(frames[0].source) : { width: Math.max(16, Number($("opt-width").value) || 480), height: 320 };
+            const addedFrames = await extractFramesFromFile(file, base.width, base.height);
+            addedFrames.forEach(function (imageData) {
+              const canvas = document.createElement("canvas"); canvas.width = imageData.width; canvas.height = imageData.height;
+              canvas.getContext("2d").putImageData(imageData, 0, 0);
+              frames.push({ id: uid(), source: canvas, thumb: canvas.toDataURL("image/png"), kind: "video-frame" });
+            });
+          }
+        }
+        renderStrip(); restartPreview();
+        if (frames.length && $("btn-sample")) $("btn-sample").hidden = true;
+        return;
+      }
       if (!videoPreviewReady) {
         const extracted = await extractVideoFrames();
         videoPreviewFrames = extracted.imageDatas; videoPreviewDelay = extracted.delay;
