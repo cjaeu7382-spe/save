@@ -37,8 +37,8 @@
           <div class="section-heading"><div><p class="eyebrow">VIDEO CLIP</p><h2>GIF로 만들 구간 선택</h2></div><span id="video-duration-label">전체 00:00</span></div>
           <video id="source-video" controls playsinline preload="metadata"></video>
           <div class="range-fields">
-            <label>시작 시간 <input id="range-start" type="number" min="0" step="0.1" value="0" /></label>
-            <label>종료 시간 <input id="range-end" type="number" min="0.1" step="0.1" value="0.1" /></label>
+            <label>시작 시간 <input id="range-start" type="text" inputmode="numeric" placeholder="00:00:00" value="00:00:00" aria-label="시작 시간 시 분 초" /></label>
+            <label>종료 시간 <input id="range-end" type="text" inputmode="numeric" placeholder="00:00:01" value="00:00:01" aria-label="종료 시간 시 분 초" /></label>
           </div>
           <div class="range-sliders">
             <label>시작 위치 <input id="range-start-slider" type="range" min="0" max="1" step="0.1" value="0" /></label>
@@ -66,6 +66,7 @@
           <label class="check"><input id="opt-dither" type="checkbox" /> 디더링 (색 부드럽게)</label>
         </form>
         <div class="export">
+          <button type="button" id="btn-preview-gif" class="ghost" disabled>생성할 GIF 미리보기</button>
           <button type="button" id="btn-make" class="primary" disabled>GIF 만들기</button>
           <div class="progress" hidden id="progress"><div class="progress-bar" id="progress-bar"></div><span id="progress-text">인코딩 중</span></div>
           <img id="result-gif" class="result-gif" alt="생성된 GIF" hidden />
