@@ -972,6 +972,7 @@
     $("tab-edit").classList.toggle("active", mode === "edit");
     $("tab-create").setAttribute("aria-pressed", String(mode === "create"));
     $("tab-edit").setAttribute("aria-pressed", String(mode === "edit"));
+    $("btn-make").textContent = mode === "edit" ? "편집한 GIF 저장" : "GIF 만들기";
     $("frame-workspace").hidden = mode === "edit" && frames.length === 0;
     if (mode === "edit") {
       clearVideo();
