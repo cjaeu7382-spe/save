@@ -181,6 +181,38 @@
     frame.textOverlay = null;
     return frame;
   }
+  function rotateVideoImageData(imageData, direction, preserveBase) {
+    const width = imageData.width, height = imageData.height;
+    const source = document.createElement("canvas");
+    source.width = width; source.height = height;
+    source.getContext("2d").putImageData(imageData, 0, 0);
+
+    // Keep every video frame on the same canvas size. A 90-degree rotation
+    // swaps the source aspect ratio, so fit it into the original frame bounds
+    // instead of exporting a mixture of portrait and landscape ImageData.
+    const turned = document.createElement("canvas");
+    turned.width = height; turned.height = width;
+    const turnedCtx = turned.getContext("2d");
+    turnedCtx.translate(turned.width / 2, turned.height / 2);
+    turnedCtx.rotate(direction * Math.PI / 2);
+    turnedCtx.drawImage(source, -width / 2, -height / 2);
+
+    const output = document.createElement("canvas");
+    output.width = width; output.height = height;
+    const ctx = output.getContext("2d");
+    ctx.fillStyle = $("opt-bg").value || "#111111";
+    ctx.fillRect(0, 0, width, height);
+    const scale = Math.min(width / turned.width, height / turned.height);
+    const drawWidth = turned.width * scale, drawHeight = turned.height * scale;
+    ctx.drawImage(turned, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
+
+    const result = ctx.getImageData(0, 0, width, height);
+    if (preserveBase !== false && imageData.textBaseData) {
+      result.textBaseData = rotateVideoImageData(imageData.textBaseData, direction, false);
+    }
+    return result;
+  }
+
   function rotateSelectedFrames(direction) {
     const isVideo = !!activeVideoUrl;
     const scope = $("rotate-scope").value;
@@ -191,17 +223,7 @@
         : [videoPreviewIndex];
       indexes.forEach(function (index) {
         const original = videoPreviewFrames[index];
-        const width = original.width, height = original.height;
-        const source = document.createElement("canvas");
-        source.width = width; source.height = height;
-        source.getContext("2d").putImageData(original, 0, 0);
-        const rotated = document.createElement("canvas");
-        rotated.width = height; rotated.height = width;
-        const ctx = rotated.getContext("2d");
-        ctx.translate(rotated.width / 2, rotated.height / 2);
-        ctx.rotate(direction * Math.PI / 2);
-        ctx.drawImage(source, -width / 2, -height / 2);
-        videoPreviewFrames[index] = ctx.getImageData(0, 0, rotated.width, rotated.height);
+        if (original) videoPreviewFrames[index] = rotateVideoImageData(original, direction);
       });
       showVideoPreviewFrame();
     } else {
