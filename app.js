@@ -290,7 +290,7 @@
   on("btn-preview-range", "click", async function () {
     if (!validVideoRange() || !sourceVideo) return;
     sourceVideo.pause(); await seekVideo(parseTime($("range-start").value)); sourceVideo.play();
-    const stopAt = Number($("range-end").value);
+    const stopAt = parseTime($("range-end").value);
     const check = function () { if (sourceVideo.currentTime >= stopAt) { sourceVideo.pause(); sourceVideo.currentTime = parseTime($("range-start").value); sourceVideo.removeEventListener("timeupdate", check); } };
     sourceVideo.addEventListener("timeupdate", check);
   });
